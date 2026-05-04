@@ -1,0 +1,11 @@
+Opening staging database at /opt/grw/modbus-storm/.opentrace/index.db.staging ...
+Indexing /opt/grw/modbus-storm ...
+  Scanning directory tree
+  Scanned 5 nodes, 0 parseable files
+  Processing 0 files
+  Extracted 0 classes, 0 functions, 0 variables from 0 files
+  Resolving calls from 0 callers, 0 derivations
+  Resolved 0 calls, 0 derivations
+  0 nodes, 0 relationships, 0 files, 0 classes, 0 functions
+  Saved 5 nodes, 4 relationships
+Done in 0.0s.

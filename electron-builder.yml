@@ -1,0 +1,54 @@
+appId: com.modbusstorm.app
+productName: modbus-storm
+copyright: Copyright © 2026 modbus-storm contributors
+license: GPL-3.0
+
+directories:
+  buildResources: resources
+  output: dist
+
+files:
+  - out/**/*
+  - "!**/*.map"
+
+extraMetadata:
+  main: out/main/index.js
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  installerIcon: resources/icons/icon.ico
+  uninstallerIcon: resources/icons/icon.ico
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  icon: resources/icons/icon.ico
+
+mac:
+  target:
+    - target: dmg
+      arch: [universal]
+    - target: zip
+      arch: [universal]
+  icon: resources/icons/icon.icns
+  category: public.app-category.developer-tools
+
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+    - target: rpm
+      arch: [x64]
+  icon: resources/icons/
+  category: Development
+
+publish:
+  provider: github
+  releaseType: release
