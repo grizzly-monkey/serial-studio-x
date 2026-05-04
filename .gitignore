@@ -1,2 +1,8 @@
 .superpowers/
 node_modules/
+out/
+dist/
+*.log
+.idea/
+.opentrace/
+.opentrace-index.log
