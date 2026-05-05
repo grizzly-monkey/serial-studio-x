@@ -13,8 +13,9 @@ files:
 extraMetadata:
   main: out/main/index.js
 
-# Artifact filename template — includes arch so arm64/x64 DMGs are clearly named
-artifactName: "${productName}-${version}-${arch}.${ext}"
+# Artifact filename template — no spaces to avoid GitHub API URL-encoding issues
+# with electron-builder's delete-then-reupload overwrite flow.
+artifactName: "serial-studio-x-${version}-${arch}.${ext}"
 
 # ── macOS ────────────────────────────────────────────────────────────────────
 # Arch is passed via CLI (--arch arm64 or --arch x64) from the CI matrix.
