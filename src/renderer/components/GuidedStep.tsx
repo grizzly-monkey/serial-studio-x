@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 
-type Phase = 'counting' | 'valid' | 'invalid'
+type Phase = 'idle' | 'counting' | 'valid' | 'invalid'
 
 export interface GuidedStepProps {
   stepNumber: number
@@ -60,7 +60,7 @@ export default function GuidedStep({
   onCalibrate, onComplete, onSkip,
   hasInput, inputLabel, inputStep = 1, inputInitial,
 }: GuidedStepProps): React.JSX.Element {
-  const [phase, setPhase] = useState<Phase>('counting')
+  const [phase, setPhase] = useState<Phase>('idle')
   const [remaining, setRemaining] = useState(timerSeconds)
   const [inputValue, setInputValue] = useState(inputInitial ?? '')
   const [writeError, setWriteError] = useState<string | null>(null)
@@ -96,6 +96,7 @@ export default function GuidedStep({
       setWriteError('Reading lost — check connection before saving.')
       return
     }
+    const reading = liveValue  // capture before await
     if (hasInput) {
       const parsed = parseFloat(inputValue)
       if (isNaN(parsed)) {
@@ -107,9 +108,9 @@ export default function GuidedStep({
     setIsWriting(true)
     try {
       await onCalibrate(hasInput ? parseFloat(inputValue) : undefined)
-      onComplete(liveValue)
+      onComplete(reading)  // use captured value
     } catch (e) {
-      setWriteError(String(e))
+      setWriteError(e instanceof Error ? e.message : String(e))
     } finally {
       setIsWriting(false)
     }
