@@ -102,9 +102,11 @@ export function registerIpcHandlers(win: BrowserWindow): void {
         return a.path.localeCompare(b.path)
       })
       return ports.map(p => {
-        const extra = p.friendlyName ?? p.manufacturer ?? ''
-        const label = extra && !extra.includes(p.path) ? `${p.path} — ${extra}` : p.path
-        return { path: p.path, label }
+        // Windows friendlyName already contains the COM number: "USB-Serial CH340 (COM3)"
+        // Use it directly as the label; fall back to "COMx — Manufacturer" or plain path.
+        if (p.friendlyName) return { path: p.path, label: p.friendlyName }
+        const extra = p.manufacturer ?? ''
+        return { path: p.path, label: extra ? `${p.path} — ${extra}` : p.path }
       })
     } catch { return [] }
   })

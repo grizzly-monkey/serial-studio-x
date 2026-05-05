@@ -113,7 +113,13 @@ function rxFrameHex(fc: number, values: number[]): string {
 function isPortError(err: unknown): boolean {
   const s = String(err).toLowerCase()
   return s.includes('port not open') || s.includes('econnreset') ||
-    s.includes('disconnected') || s.includes('closed') || s.includes('not open')
+    s.includes('disconnected') || s.includes('closed') || s.includes('not open') ||
+    s.includes('access denied') || s.includes('access is denied') || s.includes('cannot open')
+}
+
+function isAccessDenied(err: unknown): boolean {
+  const s = String(err).toLowerCase()
+  return s.includes('access denied') || s.includes('access is denied') || s.includes('cannot open')
 }
 
 function postStatus(status: string, error?: string): void {
@@ -198,7 +204,10 @@ async function connect(): Promise<void> {
     startPolling()
   } catch (err) {
     console.error(`[worker:${config.id}] connect failed:`, String(err))
-    postStatus('error', String(err))
+    const msg = isAccessDenied(err)
+      ? `Port access denied — close any other application using ${config.serialPort ?? config.host}`
+      : String(err)
+    postStatus('error', msg)
     scheduleReconnect()
   }
 }
