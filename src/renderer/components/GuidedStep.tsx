@@ -96,6 +96,13 @@ export default function GuidedStep({
       setWriteError('Reading lost — check connection before saving.')
       return
     }
+    if (hasInput) {
+      const parsed = parseFloat(inputValue)
+      if (isNaN(parsed)) {
+        setWriteError('Enter a valid numeric value.')
+        return
+      }
+    }
     setWriteError(null)
     setIsWriting(true)
     try {
