@@ -324,8 +324,8 @@ function RawHexPanel({ connection }: { connection: ConnectionConfig }) {
 // ── Builder panel ─────────────────────────────────────────────────────────────
 function BuilderPanel({ connection }: { connection: ConnectionConfig }) {
   const [fc, setFc] = useState<WriteFc>(6)
-  const [addrRaw, setAddrRaw] = useState('40001')
-  const [singleVal, setSingleVal] = useState('0')
+  const [addrRaw, setAddrRaw] = useState(connection.writeDefaults?.address ?? '40001')
+  const [singleVal, setSingleVal] = useState(connection.writeDefaults?.value ?? '0')
   const [multiCount, setMultiCount] = useState(4)
   const [multiVals, setMultiVals] = useState<string[]>(Array(8).fill('0'))
   const [coilVals, setCoilVals] = useState<boolean[]>(Array(8).fill(false))

@@ -79,7 +79,8 @@ export default function RegisterGroupEditor({ connection, onClose }: Props): Rea
   // Add-group form state
   const [fc, setFc] = useState<ReadFC>(3)
   const [startAddrRaw, setStartAddrRaw] = useState('0')
-  const [count, setCount] = useState(2)
+  const [count, setCount] = useState(2)        // raw Modbus registers on the bus
+  const [displayRows, setDisplayRows] = useState(1) // rows to show in panel (≤ numLogical)
   const [label, setLabel] = useState('')
   const [added, setAdded] = useState<string | null>(null)
   const [reconnecting, setReconnecting] = useState(false)
@@ -96,9 +97,10 @@ export default function RegisterGroupEditor({ connection, onClose }: Props): Rea
   const [regEdits, setRegEdits] = useState<RegisterConfig[]>([])
 
   const startAddr = parseStartAddr(startAddrRaw, fc)
-  const endAddr = startAddr + count - 1
   const typeWidth = dataTypeRegCount(regDataType)
+  // numLogical = max displayable rows given count + type
   const numLogical = Math.max(1, Math.floor(count / typeWidth))
+  const endAddr = startAddr + count - 1
   const totalBytes = count * 2
   const refStart = modbusRef(fc, startAddr)
   const refEnd = modbusRef(fc, endAddr)
@@ -113,9 +115,8 @@ export default function RegisterGroupEditor({ connection, onClose }: Props): Rea
 
   const addGroup = () => {
     const groupLabel = label.trim() || `Group @ ${refStart}`
-    const typeWidth = dataTypeRegCount(regDataType)
-    const numLogical = Math.max(1, Math.floor(count / typeWidth))
-    const regs: RegisterConfig[] = Array.from({ length: numLogical }, (_, i) => ({
+    const rows = Math.min(displayRows, numLogical)
+    const regs: RegisterConfig[] = Array.from({ length: rows }, (_, i) => ({
       address: startAddr + i * typeWidth,
       label: `${label.trim() || 'Reg'} ${modbusRef(fc, startAddr + i * typeWidth)}`,
       dataType: regDataType,
@@ -141,7 +142,7 @@ export default function RegisterGroupEditor({ connection, onClose }: Props): Rea
       label: groupLabel,
       functionCode: fc,
       startAddress: startAddr,
-      count,
+      count,   // raw Modbus registers read from bus
       registers: regs
     }
 
@@ -395,17 +396,32 @@ export default function RegisterGroupEditor({ connection, onClose }: Props): Rea
               </select>
             </Field>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
               <Field label={`Start Address (e.g. ${modbusRef(fc, 0)})`}>
                 <input type="text" value={startAddrRaw} onChange={e => { setStartAddrRaw(e.target.value); setAdded(null) }} placeholder={modbusRef(fc, 0)} style={inputStyle} />
                 <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
-                  protocol addr {startAddr} (0x{startAddr.toString(16).toUpperCase().padStart(4,'0')})
+                  addr {startAddr} (0x{startAddr.toString(16).toUpperCase().padStart(4,'0')})
                 </span>
               </Field>
-              <Field label="Registers to read (max 125)">
-                <input type="number" value={count} onChange={e => { setCount(Math.max(1, Math.min(125, +e.target.value))); setAdded(null) }} min={1} max={125} style={inputStyle} />
+              <Field label="Registers on bus (max 125)">
+                <input type="number" value={count} onChange={e => {
+                  const n = Math.max(1, Math.min(125, +e.target.value))
+                  setCount(n)
+                  const newMax = Math.max(1, Math.floor(n / typeWidth))
+                  setDisplayRows(r => Math.min(r, newMax))
+                  setAdded(null)
+                }} min={1} max={125} style={inputStyle} />
                 <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
-                  {totalBytes} bytes · <strong style={{ color: 'var(--primary)' }}>{numLogical} display row{numLogical !== 1 ? 's' : ''}</strong>{typeWidth > 1 ? ` (${typeWidth * 2}B per ${regDataType})` : ''}
+                  {totalBytes} bytes · {numLogical} displayable
+                </span>
+              </Field>
+              <Field label={`Rows to display (max ${numLogical})`}>
+                <input type="number" value={displayRows} onChange={e => {
+                  setDisplayRows(Math.max(1, Math.min(numLogical, +e.target.value)))
+                  setAdded(null)
+                }} min={1} max={numLogical} style={inputStyle} />
+                <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                  {displayRows < numLogical ? `hides last ${numLogical - displayRows} reg${numLogical - displayRows !== 1 ? 's' : ''}` : 'shows all'}
                 </span>
               </Field>
             </div>
@@ -423,7 +439,14 @@ export default function RegisterGroupEditor({ connection, onClose }: Props): Rea
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
                 <RegField label="Data Type">
-                  <select value={regDataType} onChange={e => setRegDataType(e.target.value as DataType)} style={inp}>
+                  <select value={regDataType} onChange={e => {
+                    const dt = e.target.value as DataType
+                    setRegDataType(dt)
+                    const tw = dataTypeRegCount(dt)
+                    const newMax = Math.max(1, Math.floor(count / tw))
+                    setDisplayRows(r => Math.min(r, newMax))
+                    setAdded(null)
+                  }} style={inp}>
                     {DATA_TYPES_CLEAN.map(dt => <option key={dt} value={dt}>{dt}</option>)}
                   </select>
                 </RegField>
@@ -466,7 +489,9 @@ export default function RegisterGroupEditor({ connection, onClose }: Props): Rea
                   <span>·</span>
                   <span style={{ color: 'var(--primary)' }}>{refStart}–{refEnd}</span>
                   <span>·</span>
-                  <span>{count} reg{count !== 1 ? 's' : ''}</span>
+                  <span>{count} reg{count !== 1 ? 's' : ''} on bus</span>
+                  <span>·</span>
+                  <span style={{ color: 'var(--success)' }}>{displayRows} row{displayRows !== 1 ? 's' : ''} displayed</span>
                 </div>
               </div>
 
@@ -475,8 +500,8 @@ export default function RegisterGroupEditor({ connection, onClose }: Props): Rea
                 <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
                   Sample Display (raw = 1234)
                 </div>
-                {Array.from({ length: Math.min(numLogical, 3) }, (_, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0', borderBottom: i < Math.min(numLogical, 3) - 1 ? '1px solid var(--border)' : undefined }}>
+                {Array.from({ length: Math.min(displayRows, 3) }, (_, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0', borderBottom: i < Math.min(displayRows, 3) - 1 ? '1px solid var(--border)' : undefined }}>
                     <span style={{ fontSize: 10, color: 'var(--primary)', minWidth: 54, fontFamily: 'ui-monospace, monospace' }}>
                       {modbusRef(fc, startAddr + i * typeWidth)}
                     </span>
@@ -490,8 +515,8 @@ export default function RegisterGroupEditor({ connection, onClose }: Props): Rea
                     <span style={{ fontSize: 10, color: 'var(--text-muted)', background: 'var(--surface-2)', padding: '1px 5px', borderRadius: 3 }}>{regWidget}</span>
                   </div>
                 ))}
-                {numLogical > 3 && (
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', paddingTop: 4 }}>+ {numLogical - 3} more…</div>
+                {displayRows > 3 && (
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', paddingTop: 4 }}>+ {displayRows - 3} more rows…</div>
                 )}
               </div>
             </div>
@@ -503,7 +528,7 @@ export default function RegisterGroupEditor({ connection, onClose }: Props): Rea
             {added && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 6, background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)', fontSize: 12, color: 'var(--success)' }}>
                 <span>✓</span>
-                <span><strong>"{added}"</strong> added — next start: {modbusRef(fc, startAddr)}</span>
+                <span><strong>"{added}"</strong> added — next start: {modbusRef(fc, startAddr + count)}</span>
               </div>
             )}
           </div>

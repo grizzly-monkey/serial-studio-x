@@ -103,6 +103,7 @@ export interface ConnectionConfig {
   panelLayout?: { x: number; y: number; w: number; h: number }
   loggingOptions?: LoggingOptions
   registerGroups: RegisterGroup[]
+  writeDefaults?: { address: string; value: string }
 }
 
 export type ThemeName = 'light' | 'dark' | 'hacker' | 'warp' | 'nord' | 'monokai' | 'solarized' | 'cyberpunk'

@@ -68,7 +68,73 @@ const DEFAULT_WORKSPACE: Workspace = {
             }
           ]
         }
-      ]
+      ],
+      writeDefaults: { address: '48195', value: '3' }
+    },
+    {
+      id: 'ddm206a-default',
+      name: 'DDM-206A EC Sensor',
+      protocol: 'rtu',
+      serialPort: '/dev/cu.usbmodem5ACC0325801',
+      baudRate: 9600,
+      dataBits: 8,
+      stopBits: 1,
+      parity: 'none',
+      flowControl: 'none',
+      slaveId: 1,
+      pollIntervalMs: 5000,
+      // DDM-206A register map (per datasheet):
+      //   Reg 0 (40001): EC × 10  → 1234 = 123.4 μS/cm  (count=2 reads 4 bytes; reg 1 is high word)
+      //   Reg 2 (40003): Temp × 10 → 252 = 25.2 °C       (count=2 reads 4 bytes; reg 3 is high word)
+      registerGroups: [
+        {
+          id: 'ddm-ec-group',
+          label: 'Conductivity',
+          functionCode: 3,
+          startAddress: 0,
+          count: 2,
+          registers: [
+            {
+              address: 0,
+              label: 'EC Value',
+              dataType: 'uint16',
+              scale: 0.1,
+              offset: 0,
+              unit: 'μS/cm',
+              displayBase: 'dec',
+              widgetType: 'table',
+              gaugeMin: 0,
+              gaugeMax: 2000,
+              sparklineWindowSecs: 60,
+              alert: { enabled: false, lowLimit: null, highLimit: null, notifyOS: false }
+            }
+          ]
+        },
+        {
+          id: 'ddm-temp-group',
+          label: 'Temperature',
+          functionCode: 3,
+          startAddress: 2,
+          count: 2,
+          registers: [
+            {
+              address: 2,
+              label: 'Temperature',
+              dataType: 'uint16',
+              scale: 0.1,
+              offset: 0,
+              unit: '°C',
+              displayBase: 'dec',
+              widgetType: 'table',
+              gaugeMin: 0,
+              gaugeMax: 50,
+              sparklineWindowSecs: 60,
+              alert: { enabled: false, lowLimit: null, highLimit: null, notifyOS: false }
+            }
+          ]
+        }
+      ],
+      writeDefaults: { address: '48195', value: '2' }
     }
   ]
 }
