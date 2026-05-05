@@ -3,6 +3,7 @@ import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { registerIpcHandlers, cleanupIpc } from './ipc-router'
 import { killAll } from './worker-registry'
+import { setupUpdater, checkForUpdates, startPolling } from './updater'
 
 // Suppress broken-pipe / stdio errors that fire when utility-process workers
 // exit during app shutdown and the parent tries to write to the dead pipe.
@@ -53,6 +54,12 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+
+  // Auto-updater: set up listeners, check on startup, then poll every 6 hours.
+  // Renderer can adjust autoDownload + interval via IPC once loaded.
+  setupUpdater(true)
+  setTimeout(() => checkForUpdates(), 4000)
+  startPolling(6)
 })
 
 app.on('window-all-closed', () => {

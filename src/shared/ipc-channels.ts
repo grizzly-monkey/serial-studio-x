@@ -36,4 +36,16 @@ export const IPC = {
   WINDOW_POP: 'window:pop',
   WINDOW_POP_OUT: 'window:pop-out',
   WINDOW_POP_IN: 'window:pop-in',
+  // Auto-updater
+  UPDATE_CHECKING:      'update:checking',
+  UPDATE_AVAILABLE:     'update:available',
+  UPDATE_NOT_AVAILABLE: 'update:not-available',
+  UPDATE_PROGRESS:      'update:progress',
+  UPDATE_DOWNLOADED:    'update:downloaded',
+  UPDATE_ERROR:         'update:error',
+  UPDATE_CHECK:         'update:check',
+  UPDATE_DOWNLOAD:      'update:download',
+  UPDATE_INSTALL:       'update:install',
+  UPDATE_SET_AUTO:      'update:set-auto',
+  UPDATE_SET_INTERVAL:  'update:set-interval',
 } as const

@@ -9,6 +9,7 @@ import {
   exportWorkspace, importWorkspace, startLogging, stopLogging
 } from './file-io'
 import { openTerminal, closeTerminal, writeTerminal, closeAllTerminals } from './serial-terminal-manager'
+import { checkForUpdates, downloadUpdate, installUpdate, setAutoDownload, startPolling } from './updater'
 import type { ConnectionConfig, Workspace } from '../shared/types'
 
 export function registerIpcHandlers(win: BrowserWindow): void {
@@ -145,6 +146,16 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     } else {
       popup.loadFile(join(__dirname, '../renderer/index.html'), { query: { panel: connectionId } })
     }
+  })
+
+  ipcMain.handle(IPC.UPDATE_CHECK, async () => { await checkForUpdates() })
+  ipcMain.handle(IPC.UPDATE_DOWNLOAD, async () => { await downloadUpdate() })
+  ipcMain.handle(IPC.UPDATE_INSTALL, () => { installUpdate() })
+  ipcMain.handle(IPC.UPDATE_SET_AUTO, (_evt, enabled: boolean) => {
+    setAutoDownload(enabled)
+  })
+  ipcMain.handle(IPC.UPDATE_SET_INTERVAL, (_evt, hours: number) => {
+    startPolling(hours)
   })
 }
 

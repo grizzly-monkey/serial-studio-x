@@ -112,6 +112,8 @@ export interface WorkspaceSettings {
   preferredBase: 'hex' | 'dec'
   theme: ThemeName
   logDrawerOpen: boolean
+  autoUpdate: boolean
+  updateCheckIntervalHours: number
 }
 
 export interface Workspace {

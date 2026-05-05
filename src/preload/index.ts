@@ -87,6 +87,43 @@ const api = {
     return () => ipcRenderer.removeListener(IPC.SCAN_DONE, handler)
   },
 
+  // Auto-updater
+  checkForUpdates: (): Promise<void> => ipcRenderer.invoke(IPC.UPDATE_CHECK),
+  downloadUpdate: (): Promise<void> => ipcRenderer.invoke(IPC.UPDATE_DOWNLOAD),
+  installUpdate: (): Promise<void> => ipcRenderer.invoke(IPC.UPDATE_INSTALL),
+  setAutoDownload: (enabled: boolean): Promise<void> => ipcRenderer.invoke(IPC.UPDATE_SET_AUTO, enabled),
+  setUpdateInterval: (hours: number): Promise<void> => ipcRenderer.invoke(IPC.UPDATE_SET_INTERVAL, hours),
+  onUpdateChecking: (cb: () => void) => {
+    const handler = () => cb()
+    ipcRenderer.on(IPC.UPDATE_CHECKING, handler)
+    return () => ipcRenderer.removeListener(IPC.UPDATE_CHECKING, handler)
+  },
+  onUpdateAvailable: (cb: (info: { version: string; releaseDate?: string; releaseNotes?: string }) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, info: unknown) => cb(info as { version: string; releaseDate?: string; releaseNotes?: string })
+    ipcRenderer.on(IPC.UPDATE_AVAILABLE, handler)
+    return () => ipcRenderer.removeListener(IPC.UPDATE_AVAILABLE, handler)
+  },
+  onUpdateNotAvailable: (cb: () => void) => {
+    const handler = () => cb()
+    ipcRenderer.on(IPC.UPDATE_NOT_AVAILABLE, handler)
+    return () => ipcRenderer.removeListener(IPC.UPDATE_NOT_AVAILABLE, handler)
+  },
+  onUpdateProgress: (cb: (p: { percent: number; bytesPerSecond: number; transferred: number; total: number }) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, p: unknown) => cb(p as { percent: number; bytesPerSecond: number; transferred: number; total: number })
+    ipcRenderer.on(IPC.UPDATE_PROGRESS, handler)
+    return () => ipcRenderer.removeListener(IPC.UPDATE_PROGRESS, handler)
+  },
+  onUpdateDownloaded: (cb: (info: { version: string }) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, info: unknown) => cb(info as { version: string })
+    ipcRenderer.on(IPC.UPDATE_DOWNLOADED, handler)
+    return () => ipcRenderer.removeListener(IPC.UPDATE_DOWNLOADED, handler)
+  },
+  onUpdateError: (cb: (msg: string) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, msg: unknown) => cb(msg as string)
+    ipcRenderer.on(IPC.UPDATE_ERROR, handler)
+    return () => ipcRenderer.removeListener(IPC.UPDATE_ERROR, handler)
+  },
+
   onPollResult: (cb: (data: unknown) => void) => {
     const handler = (_: Electron.IpcRendererEvent, data: unknown) => cb(data)
     ipcRenderer.on(IPC.POLL_RESULT, handler)

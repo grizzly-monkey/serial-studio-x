@@ -4,7 +4,7 @@ import type { Workspace, ConnectionConfig, WorkspaceSettings } from '../../share
 export const DEFAULT_WORKSPACE: Workspace = {
   schemaVersion: 1,
   name: 'Default',
-  settings: { preferredBase: 'dec', theme: 'dark', logDrawerOpen: false },
+  settings: { preferredBase: 'dec', theme: 'dark', logDrawerOpen: false, autoUpdate: true, updateCheckIntervalHours: 6 },
   connections: [],
 }
 

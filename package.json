@@ -42,6 +42,7 @@
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",
+    "electron-updater": "^6.8.3",
     "modbus-serial": "^8.0.25",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",

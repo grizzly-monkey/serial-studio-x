@@ -7,6 +7,7 @@ import LogDrawer from './components/LogDrawer'
 import GrowlocMenu from './components/GrowlocMenu'
 import { useWorkspaceStore } from './store/workspace'
 import { useConnectionsStore } from './store/connections'
+import { useUpdaterStore } from './store/updater'
 import type { LogEntry } from '../shared/types'
 
 export default function App(): React.JSX.Element {
@@ -18,10 +19,55 @@ export default function App(): React.JSX.Element {
   const [showGrowloc, setShowGrowloc] = useState(false)
   const gPressCount = useRef(0)
   const gPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { setStatus: setUpdateStatus, setInfo: setUpdateInfo, setProgress: setUpdateProgress,
+          setError: setUpdateError, setLastChecked } = useUpdaterStore()
+  const autoUpdate = useWorkspaceStore(s => s.workspace.settings.autoUpdate)
+  const updateIntervalHours = useWorkspaceStore(s => s.workspace.settings.updateCheckIntervalHours)
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
   }, [theme])
+
+  // Sync auto-update settings to main process when they change
+  useEffect(() => {
+    window.api.setAutoDownload(autoUpdate)
+    window.api.setUpdateInterval(updateIntervalHours)
+  }, [autoUpdate, updateIntervalHours])
+
+  // Wire up update IPC events
+  useEffect(() => {
+    const offChecking = window.api.onUpdateChecking(() => {
+      setUpdateStatus('checking')
+    })
+    const offAvailable = window.api.onUpdateAvailable((info) => {
+      setUpdateInfo(info)
+      setUpdateStatus('available')
+      setLastChecked(Date.now())
+    })
+    const offNotAvailable = window.api.onUpdateNotAvailable(() => {
+      setUpdateStatus('uptodate')
+      setLastChecked(Date.now())
+      // Revert to idle after 5s so button stays quiet
+      setTimeout(() => setUpdateStatus('idle'), 5000)
+    })
+    const offProgress = window.api.onUpdateProgress((p) => {
+      setUpdateProgress(p)
+      setUpdateStatus('downloading')
+    })
+    const offDownloaded = window.api.onUpdateDownloaded((info) => {
+      setUpdateInfo(info)
+      setUpdateStatus('downloaded')
+    })
+    const offError = window.api.onUpdateError((msg) => {
+      setUpdateError(msg)
+      setUpdateStatus('error')
+      setLastChecked(Date.now())
+    })
+    return () => {
+      offChecking(); offAvailable(); offNotAvailable()
+      offProgress(); offDownloaded(); offError()
+    }
+  }, [])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

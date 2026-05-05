@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useWorkspaceStore } from '../store/workspace'
+import { useUpdaterStore } from '../store/updater'
 import AboutModal from './AboutModal'
+import UpdatePanel from './UpdatePanel'
 import type { ThemeName } from '../../shared/types'
 
 const THEMES: { id: ThemeName; label: string; dot: string }[] = [
@@ -18,12 +20,16 @@ export default function TopBar(): React.JSX.Element {
   const { workspace, activeProfile, setSettings } = useWorkspaceStore()
   const [themeOpen, setThemeOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
+  const [updateOpen, setUpdateOpen] = useState(false)
   const themeRef = useRef<HTMLDivElement>(null)
+  const updateRef = useRef<HTMLDivElement>(null)
   const currentTheme = workspace.settings.theme
+  const { status: updateStatus, info: updateInfo } = useUpdaterStore()
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (themeRef.current && !themeRef.current.contains(e.target as Node)) setThemeOpen(false)
+      if (updateRef.current && !updateRef.current.contains(e.target as Node)) setUpdateOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
@@ -70,6 +76,17 @@ export default function TopBar(): React.JSX.Element {
         <span style={{ fontSize: 13 }}>⚡</span>
         <span>by <strong style={{ color: 'var(--primary)', fontFamily: 'var(--font-mono, monospace)' }}>@grizzly_monkey</strong></span>
       </button>
+
+      {/* Update indicator */}
+      <div ref={updateRef} style={{ position: 'relative' }}>
+        <UpdateButton
+          status={updateStatus}
+          version={updateInfo?.version}
+          onClick={() => setUpdateOpen(v => !v)}
+          active={updateOpen}
+        />
+        {updateOpen && <UpdatePanel onClose={() => setUpdateOpen(false)} />}
+      </div>
 
       {/* Theme picker */}
       <div ref={themeRef} style={{ position: 'relative' }}>
@@ -120,5 +137,72 @@ export default function TopBar(): React.JSX.Element {
 
     {aboutOpen && <AboutModal onClose={() => setAboutOpen(false)} />}
     </>
+  )
+}
+
+function UpdateButton({ status, version, onClick, active }: {
+  status: string; version?: string; onClick: () => void; active: boolean
+}) {
+  const hasUpdate = status === 'available' || status === 'downloading' || status === 'downloaded'
+
+  const dotColor =
+    status === 'downloaded' ? '#16a34a' :
+    status === 'downloading' ? 'var(--primary)' :
+    status === 'available' ? '#d97706' :
+    status === 'error' ? '#ef4444' : null
+
+  const label =
+    status === 'downloaded' ? '⟳ Restart' :
+    status === 'checking' ? '↻' :
+    '↑'
+
+  return (
+    <button
+      onClick={onClick}
+      title={
+        status === 'available' ? `Update v${version} available` :
+        status === 'downloaded' ? `v${version} ready to install` :
+        status === 'downloading' ? 'Downloading update…' :
+        status === 'checking' ? 'Checking for updates…' :
+        'Check for updates'
+      }
+      style={{
+        display: 'flex', alignItems: 'center', gap: 5, position: 'relative',
+        background: active ? 'var(--primary-light)' :
+          status === 'downloaded' ? '#16a34a22' :
+          status === 'available' ? '#fef3c722' :
+          'var(--surface-2)',
+        border: `1px solid ${
+          active ? 'var(--primary)' :
+          status === 'downloaded' ? '#16a34a66' :
+          status === 'available' ? '#d9770666' :
+          'var(--border)'
+        }`,
+        borderRadius: 5, padding: '4px 9px', cursor: 'pointer',
+        fontSize: 12, color:
+          status === 'downloaded' ? '#16a34a' :
+          status === 'available' ? '#d97706' :
+          'var(--text-muted)',
+        fontWeight: hasUpdate ? 700 : 400,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      <span style={{
+        fontSize: status === 'checking' ? 13 : 11,
+        animation: status === 'checking' ? 'spin 1s linear infinite' : 'none',
+        display: 'inline-block',
+      }}>
+        {label}
+      </span>
+      {status === 'downloaded' && version && (
+        <span style={{ fontSize: 10, fontFamily: 'var(--font-mono, monospace)' }}>v{version}</span>
+      )}
+      {dotColor && (
+        <span style={{
+          width: 6, height: 6, borderRadius: '50%', background: dotColor,
+          animation: (status === 'available' || status === 'downloaded') ? 'pulse-dot 1.5s ease-in-out infinite' : 'none',
+        }} />
+      )}
+    </button>
   )
 }
