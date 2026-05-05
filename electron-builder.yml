@@ -1,6 +1,6 @@
 appId: com.grw.modbus-storm
-productName: Modbus Storm
-copyright: Copyright © 2026 Modbus Storm contributors
+productName: Serial Studio X
+copyright: Copyright © 2026 Serial Studio X contributors
 
 directories:
   buildResources: resources
