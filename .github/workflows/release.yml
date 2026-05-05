@@ -18,29 +18,29 @@ jobs:
           # macOS Apple Silicon (M1/M2/M3/M4) — arm64
           - name: macOS Apple Silicon
             os: macos-latest
-            arch: arm64
-            build_flag: --mac
+            rebuild_arch: arm64
+            build_cmd: --mac --arm64
             platform: mac
 
           # macOS Intel — x86_64
           - name: macOS Intel
             os: macos-13
-            arch: x64
-            build_flag: --mac
+            rebuild_arch: x64
+            build_cmd: --mac --x64
             platform: mac
 
           # Windows x64
           - name: Windows x64
             os: windows-latest
-            arch: x64
-            build_flag: --win
+            rebuild_arch: x64
+            build_cmd: --win --x64
             platform: win
 
           # Linux x64
           - name: Linux x64
             os: ubuntu-latest
-            arch: x64
-            build_flag: --linux
+            rebuild_arch: x64
+            build_cmd: --linux --x64
             platform: linux
 
     runs-on: ${{ matrix.os }}
@@ -71,13 +71,13 @@ jobs:
         run: npm ci
 
       - name: Rebuild native modules
-        run: npx electron-rebuild --arch ${{ matrix.arch }}
+        run: npx electron-rebuild --arch ${{ matrix.rebuild_arch }}
 
       - name: Build app
         run: npm run build
 
       - name: Package and publish
-        run: npx electron-builder ${{ matrix.build_flag }} --arch ${{ matrix.arch }} --publish always
+        run: npx electron-builder ${{ matrix.build_cmd }} --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Uncomment and configure the secrets below to enable macOS code signing + notarization:
