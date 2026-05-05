@@ -47,8 +47,6 @@ win:
   target:
     - target: nsis
       arch: [x64]
-    - target: portable
-      arch: [x64]
   icon: resources/icons/icon.ico
 
 # ── Linux ────────────────────────────────────────────────────────────────────
@@ -66,4 +64,4 @@ linux:
 # ── Publishing ───────────────────────────────────────────────────────────────
 publish:
   provider: github
-  releaseType: release
+  releaseType: draft

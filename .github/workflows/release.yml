@@ -9,8 +9,33 @@ permissions:
   contents: write
 
 jobs:
+  # ── Step 1: Create the GitHub Release (draft) before any build job starts.
+  # This eliminates the race condition where all 4 platform jobs try to create
+  # the same release simultaneously and all but one fail with a 422 conflict.
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (for --generate-notes commit history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Serial Studio X $TAG" \
+            --draft \
+            --generate-notes
+
+  # ── Step 2: Build and upload binaries on each platform.
   build:
     name: Build — ${{ matrix.name }}
+    needs: create-release
     strategy:
       fail-fast: false
       matrix:
@@ -21,7 +46,7 @@ jobs:
             build_cmd: --mac --arm64
             platform: mac
 
-          # macOS Intel — x86_64
+          # macOS Intel — x86_64 (macos-13 is the last Intel GitHub runner)
           - name: macOS Intel
             os: macos-13
             build_cmd: --mac --x64
@@ -40,6 +65,7 @@ jobs:
             platform: linux
 
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
 
     steps:
       - name: Checkout source
@@ -69,13 +95,25 @@ jobs:
       - name: Build app
         run: npm run build
 
-      - name: Package and publish
+      - name: Package and upload to release
         run: npx electron-builder ${{ matrix.build_cmd }} --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Uncomment and configure the secrets below to enable macOS code signing + notarization:
+          # Uncomment to enable macOS code signing + notarization:
           # CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
           # CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           # APPLE_ID: ${{ secrets.APPLE_ID }}
           # APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+  # ── Step 3: All builds done — publish the draft release.
+  finalize-release:
+    name: Publish Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false

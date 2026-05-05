@@ -13,7 +13,10 @@
     "dist:linux": "npm run build && electron-builder --linux --publish never",
     "test": "echo \"No tests yet\""
   },
-  "author": "Serial Studio X contributors",
+  "author": {
+    "name": "Serial Studio X contributors",
+    "email": "jeet.parmar@mariadb.com"
+  },
   "license": "GPL-3.0",
   "repository": {
     "type": "git",
