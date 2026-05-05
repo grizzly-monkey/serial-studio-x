@@ -88,6 +88,7 @@ const api = {
   },
 
   // Auto-updater
+  getAppVersion: (): string => process.env['npm_package_version'] ?? '?',
   checkForUpdates: (): Promise<void> => ipcRenderer.invoke(IPC.UPDATE_CHECK),
   downloadUpdate: (): Promise<void> => ipcRenderer.invoke(IPC.UPDATE_DOWNLOAD),
   installUpdate: (): Promise<void> => ipcRenderer.invoke(IPC.UPDATE_INSTALL),

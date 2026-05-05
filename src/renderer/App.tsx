@@ -14,6 +14,19 @@ export default function App(): React.JSX.Element {
   const theme = useWorkspaceStore(s => s.workspace.settings.theme)
   const connections = useWorkspaceStore(s => s.workspace.connections)
   const { setStatus, setRegisterValues, appendSparkline, appendLog, popOut, popIn } = useConnectionsStore()
+
+  function sysLog(msg: string, status: 'ok' | 'error' = 'ok') {
+    appendLog({
+      id: `upd-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      timestamp: Date.now(),
+      connectionId: '__system__',
+      connectionName: 'updater',
+      direction: 'rx',
+      fc: 0, address: 0, rawHex: '', rawDec: '', unit: '',
+      decodedValue: msg,
+      status,
+    })
+  }
   const shownErrors = useRef<Set<string>>(new Set())
   const [errorToast, setErrorToast] = useState<{ connectionName: string; message: string } | null>(null)
   const [showGrowloc, setShowGrowloc] = useState(false)
@@ -38,30 +51,38 @@ export default function App(): React.JSX.Element {
   useEffect(() => {
     const offChecking = window.api.onUpdateChecking(() => {
       setUpdateStatus('checking')
+      sysLog('Checking for updates…')
     })
     const offAvailable = window.api.onUpdateAvailable((info) => {
       setUpdateInfo(info)
       setUpdateStatus('available')
       setLastChecked(Date.now())
+      sysLog(`Update available: v${info.version}`)
     })
     const offNotAvailable = window.api.onUpdateNotAvailable(() => {
       setUpdateStatus('uptodate')
       setLastChecked(Date.now())
+      sysLog('Already up to date')
       // Revert to idle after 5s so button stays quiet
       setTimeout(() => setUpdateStatus('idle'), 5000)
     })
     const offProgress = window.api.onUpdateProgress((p) => {
       setUpdateProgress(p)
+      if (Math.round(p.percent) % 25 === 0) {
+        sysLog(`Downloading update… ${Math.round(p.percent)}%`)
+      }
       setUpdateStatus('downloading')
     })
     const offDownloaded = window.api.onUpdateDownloaded((info) => {
       setUpdateInfo(info)
       setUpdateStatus('downloaded')
+      sysLog(`v${info.version} downloaded — restart to install`)
     })
     const offError = window.api.onUpdateError((msg) => {
       setUpdateError(msg)
       setUpdateStatus('error')
       setLastChecked(Date.now())
+      sysLog(`Update error: ${msg}`, 'error')
     })
     return () => {
       offChecking(); offAvailable(); offNotAvailable()

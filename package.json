@@ -1,6 +1,6 @@
 {
   "name": "serial-studio-x",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A beautiful, production-ready open-source serial protocol client",
   "main": "out/main/index.js",
   "scripts": {

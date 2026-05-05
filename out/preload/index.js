@@ -32,7 +32,19 @@ const IPC = {
   TERMINAL_STATUS: "terminal:status",
   WINDOW_POP: "window:pop",
   WINDOW_POP_OUT: "window:pop-out",
-  WINDOW_POP_IN: "window:pop-in"
+  WINDOW_POP_IN: "window:pop-in",
+  // Auto-updater
+  UPDATE_CHECKING: "update:checking",
+  UPDATE_AVAILABLE: "update:available",
+  UPDATE_NOT_AVAILABLE: "update:not-available",
+  UPDATE_PROGRESS: "update:progress",
+  UPDATE_DOWNLOADED: "update:downloaded",
+  UPDATE_ERROR: "update:error",
+  UPDATE_CHECK: "update:check",
+  UPDATE_DOWNLOAD: "update:download",
+  UPDATE_INSTALL: "update:install",
+  UPDATE_SET_AUTO: "update:set-auto",
+  UPDATE_SET_INTERVAL: "update:set-interval"
 };
 const api = {
   connectConnection: (config) => electron.ipcRenderer.invoke(IPC.CONNECTION_CONNECT, config),
@@ -94,6 +106,43 @@ const api = {
     const handler = (_, data) => cb(data);
     electron.ipcRenderer.on(IPC.SCAN_DONE, handler);
     return () => electron.ipcRenderer.removeListener(IPC.SCAN_DONE, handler);
+  },
+  // Auto-updater
+  getAppVersion: () => process.env["npm_package_version"] ?? "?",
+  checkForUpdates: () => electron.ipcRenderer.invoke(IPC.UPDATE_CHECK),
+  downloadUpdate: () => electron.ipcRenderer.invoke(IPC.UPDATE_DOWNLOAD),
+  installUpdate: () => electron.ipcRenderer.invoke(IPC.UPDATE_INSTALL),
+  setAutoDownload: (enabled) => electron.ipcRenderer.invoke(IPC.UPDATE_SET_AUTO, enabled),
+  setUpdateInterval: (hours) => electron.ipcRenderer.invoke(IPC.UPDATE_SET_INTERVAL, hours),
+  onUpdateChecking: (cb) => {
+    const handler = () => cb();
+    electron.ipcRenderer.on(IPC.UPDATE_CHECKING, handler);
+    return () => electron.ipcRenderer.removeListener(IPC.UPDATE_CHECKING, handler);
+  },
+  onUpdateAvailable: (cb) => {
+    const handler = (_, info) => cb(info);
+    electron.ipcRenderer.on(IPC.UPDATE_AVAILABLE, handler);
+    return () => electron.ipcRenderer.removeListener(IPC.UPDATE_AVAILABLE, handler);
+  },
+  onUpdateNotAvailable: (cb) => {
+    const handler = () => cb();
+    electron.ipcRenderer.on(IPC.UPDATE_NOT_AVAILABLE, handler);
+    return () => electron.ipcRenderer.removeListener(IPC.UPDATE_NOT_AVAILABLE, handler);
+  },
+  onUpdateProgress: (cb) => {
+    const handler = (_, p) => cb(p);
+    electron.ipcRenderer.on(IPC.UPDATE_PROGRESS, handler);
+    return () => electron.ipcRenderer.removeListener(IPC.UPDATE_PROGRESS, handler);
+  },
+  onUpdateDownloaded: (cb) => {
+    const handler = (_, info) => cb(info);
+    electron.ipcRenderer.on(IPC.UPDATE_DOWNLOADED, handler);
+    return () => electron.ipcRenderer.removeListener(IPC.UPDATE_DOWNLOADED, handler);
+  },
+  onUpdateError: (cb) => {
+    const handler = (_, msg) => cb(msg);
+    electron.ipcRenderer.on(IPC.UPDATE_ERROR, handler);
+    return () => electron.ipcRenderer.removeListener(IPC.UPDATE_ERROR, handler);
   },
   onPollResult: (cb) => {
     const handler = (_, data) => cb(data);

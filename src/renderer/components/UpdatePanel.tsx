@@ -56,7 +56,12 @@ export default function UpdatePanel({ onClose }: Props): React.JSX.Element {
     <div style={panel}>
       {/* Header */}
       <div style={{ ...row, background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
-        <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)' }}>Updates</span>
+        <div>
+          <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)' }}>Updates</span>
+          <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono, monospace)' }}>
+            current: v{window.api.getAppVersion()}
+          </span>
+        </div>
         <button onClick={onClose} style={{
           background: 'none', border: 'none', color: 'var(--text-muted)',
           cursor: 'pointer', fontSize: 16, padding: 0, lineHeight: 1,

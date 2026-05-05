@@ -25,6 +25,7 @@ const electron = require("electron");
 const path = require("path");
 const utils = require("@electron-toolkit/utils");
 const fs = require("fs");
+const electronUpdater = require("electron-updater");
 const IPC = {
   CONNECTION_CONNECT: "connection:connect",
   CONNECTION_DISCONNECT: "connection:disconnect",
@@ -57,7 +58,19 @@ const IPC = {
   TERMINAL_STATUS: "terminal:status",
   WINDOW_POP: "window:pop",
   WINDOW_POP_OUT: "window:pop-out",
-  WINDOW_POP_IN: "window:pop-in"
+  WINDOW_POP_IN: "window:pop-in",
+  // Auto-updater
+  UPDATE_CHECKING: "update:checking",
+  UPDATE_AVAILABLE: "update:available",
+  UPDATE_NOT_AVAILABLE: "update:not-available",
+  UPDATE_PROGRESS: "update:progress",
+  UPDATE_DOWNLOADED: "update:downloaded",
+  UPDATE_ERROR: "update:error",
+  UPDATE_CHECK: "update:check",
+  UPDATE_DOWNLOAD: "update:download",
+  UPDATE_INSTALL: "update:install",
+  UPDATE_SET_AUTO: "update:set-auto",
+  UPDATE_SET_INTERVAL: "update:set-interval"
 };
 const alertStates = /* @__PURE__ */ new Map();
 function checkAlert(connectionId, reg, decoded) {
@@ -348,7 +361,7 @@ function transformPollResult(rawValues, registers, timestamp) {
   }
   return results;
 }
-function broadcast$2(channel, data) {
+function broadcast$3(channel, data) {
   for (const w of electron.BrowserWindow.getAllWindows()) {
     if (!w.isDestroyed()) w.webContents.send(channel, data);
   }
@@ -418,7 +431,7 @@ async function spawnWorker(config) {
       } else {
         decodedValue = `FC${String(p.fc).padStart(2, "0")} addr ${p.startAddress}–${p.startAddress + p.count - 1} (${p.count} reg${p.count !== 1 ? "s" : ""})`;
       }
-      broadcast$2(IPC.LOG_ENTRY, {
+      broadcast$3(IPC.LOG_ENTRY, {
         id: `tx-${p.connectionId}-${p.timestamp}-${p.startAddress}`,
         timestamp: p.timestamp,
         connectionId: p.connectionId,
@@ -438,16 +451,16 @@ async function spawnWorker(config) {
         console.log(`[registry] status from ${msg.payload.connectionId}: ${msg.payload.status}${msg.payload.error ? " — " + msg.payload.error : ""}`);
       } catch {
       }
-      broadcast$2(IPC.CONNECTION_STATUS, msg.payload);
+      broadcast$3(IPC.CONNECTION_STATUS, msg.payload);
     }
     if (msg.type === "write-ok" || msg.type === "write-error") {
-      broadcast$2(IPC.REGISTER_WRITE, msg);
+      broadcast$3(IPC.REGISTER_WRITE, msg);
     }
     if (msg.type === "echo-response") {
       const p = msg.payload;
-      broadcast$2(IPC.ECHO_RESPONSE, p);
+      broadcast$3(IPC.ECHO_RESPONSE, p);
       const rxHex = p.bytes.map((b) => b.toString(16).toUpperCase().padStart(2, "0")).join(" ");
-      broadcast$2(IPC.LOG_ENTRY, {
+      broadcast$3(IPC.LOG_ENTRY, {
         id: `echo-rx-${p.connectionId}-${p.timestamp}`,
         timestamp: p.timestamp,
         connectionId: p.connectionId,
@@ -472,7 +485,7 @@ async function spawnWorker(config) {
       workers.delete(config.id);
     }
     if (code !== 0 && code !== null) {
-      broadcast$2(IPC.CONNECTION_STATUS, {
+      broadcast$3(IPC.CONNECTION_STATUS, {
         connectionId: config.id,
         status: "error",
         error: `Worker exited with code ${code}`
@@ -494,7 +507,7 @@ function handlePollResult(result, config) {
     const val = typeof rv.decoded === "number" ? Number.isInteger(rv.decoded) ? String(rv.decoded) : rv.decoded.toFixed(2) : rv.decoded;
     return reg.unit ? `${val} ${reg.unit}` : String(val);
   }).filter(Boolean).join(" | ");
-  broadcast$2(IPC.LOG_ENTRY, {
+  broadcast$3(IPC.LOG_ENTRY, {
     id: `rx-${result.connectionId}-${result.timestamp}-${result.startAddress}`,
     timestamp: result.timestamp,
     connectionId: result.connectionId,
@@ -539,7 +552,7 @@ function handlePollResult(result, config) {
   }
   if (now - lastPushTime >= 16) {
     lastPushTime = now;
-    broadcast$2(IPC.POLL_RESULT, { ...pendingUpdates });
+    broadcast$3(IPC.POLL_RESULT, { ...pendingUpdates });
     try {
       console.log(`[registry] IPC POLL_RESULT sent`);
     } catch {
@@ -575,7 +588,7 @@ function sendRawFrame(connectionId, bytes) {
 function killAll() {
   for (const id of [...workers.keys()]) killWorker(id);
 }
-function broadcast$1(channel, data) {
+function broadcast$2(channel, data) {
   for (const w of electron.BrowserWindow.getAllWindows()) {
     if (!w.isDestroyed()) w.webContents.send(channel, data);
   }
@@ -593,8 +606,8 @@ async function startScan(config, timeoutMs, win) {
   scanProcess = electron.utilityProcess.fork(getScanWorkerPath(), [], { stdio: "inherit" });
   scanProcess.postMessage({ type: "init", config, timeoutMs });
   scanProcess.on("message", (msg) => {
-    if (msg.type === "progress") broadcast$1(IPC.SCAN_PROGRESS, msg.payload);
-    if (msg.type === "done") broadcast$1(IPC.SCAN_DONE, msg.payload);
+    if (msg.type === "progress") broadcast$2(IPC.SCAN_PROGRESS, msg.payload);
+    if (msg.type === "done") broadcast$2(IPC.SCAN_DONE, msg.payload);
   });
   scanProcess.on("exit", () => {
     scanProcess = null;
@@ -619,7 +632,7 @@ async function stopScan() {
     });
   });
 }
-function broadcast(channel, data) {
+function broadcast$1(channel, data) {
   for (const w of electron.BrowserWindow.getAllWindows()) {
     if (!w.isDestroyed()) w.webContents.send(channel, data);
   }
@@ -641,13 +654,13 @@ async function openTerminal(config) {
     autoOpen: false
   });
   port.on("data", (data) => {
-    broadcast(IPC.TERMINAL_DATA, { connectionId: config.id, bytes: Array.from(data) });
+    broadcast$1(IPC.TERMINAL_DATA, { connectionId: config.id, bytes: Array.from(data) });
   });
   port.on("error", (err) => {
-    broadcast(IPC.TERMINAL_STATUS, { connectionId: config.id, status: "error", error: err.message });
+    broadcast$1(IPC.TERMINAL_STATUS, { connectionId: config.id, status: "error", error: err.message });
   });
   port.on("close", () => {
-    broadcast(IPC.TERMINAL_STATUS, { connectionId: config.id, status: "idle" });
+    broadcast$1(IPC.TERMINAL_STATUS, { connectionId: config.id, status: "idle" });
     openPorts.delete(config.id);
   });
   await new Promise((resolve, reject) => {
@@ -657,7 +670,7 @@ async function openTerminal(config) {
     });
   });
   openPorts.set(config.id, port);
-  broadcast(IPC.TERMINAL_STATUS, { connectionId: config.id, status: "connected" });
+  broadcast$1(IPC.TERMINAL_STATUS, { connectionId: config.id, status: "connected" });
 }
 async function closeTerminal(connectionId) {
   const port = openPorts.get(connectionId);
@@ -674,6 +687,87 @@ function writeTerminal(connectionId, bytes) {
 async function closeAllTerminals() {
   for (const id of [...openPorts.keys()]) {
     await closeTerminal(id);
+  }
+}
+let pollTimer = null;
+let listenersRegistered = false;
+function broadcast(channel, data) {
+  for (const w of electron.BrowserWindow.getAllWindows()) {
+    if (!w.isDestroyed()) w.webContents.send(channel, data);
+  }
+}
+function setupUpdater(autoDownload) {
+  electronUpdater.autoUpdater.autoDownload = autoDownload;
+  electronUpdater.autoUpdater.autoInstallOnAppQuit = false;
+  electronUpdater.autoUpdater.forceDevUpdateConfig = true;
+  if (listenersRegistered) return;
+  listenersRegistered = true;
+  electronUpdater.autoUpdater.on("checking-for-update", () => {
+    broadcast(IPC.UPDATE_CHECKING);
+  });
+  electronUpdater.autoUpdater.on("update-available", (info) => {
+    broadcast(IPC.UPDATE_AVAILABLE, {
+      version: info.version,
+      releaseDate: info.releaseDate,
+      releaseNotes: typeof info.releaseNotes === "string" ? info.releaseNotes : Array.isArray(info.releaseNotes) ? info.releaseNotes.map((n) => n.note ?? "").join("\n") : ""
+    });
+  });
+  electronUpdater.autoUpdater.on("update-not-available", () => {
+    broadcast(IPC.UPDATE_NOT_AVAILABLE);
+  });
+  electronUpdater.autoUpdater.on("download-progress", (p) => {
+    broadcast(IPC.UPDATE_PROGRESS, {
+      percent: p.percent,
+      bytesPerSecond: p.bytesPerSecond,
+      transferred: p.transferred,
+      total: p.total
+    });
+  });
+  electronUpdater.autoUpdater.on("update-downloaded", (info) => {
+    broadcast(IPC.UPDATE_DOWNLOADED, { version: info.version });
+  });
+  electronUpdater.autoUpdater.on("error", (err) => {
+    const msg = err?.message ?? String(err);
+    broadcast(IPC.UPDATE_ERROR, msg);
+    console.error("[updater] error:", msg);
+  });
+}
+async function checkForUpdates() {
+  broadcast(IPC.UPDATE_CHECKING);
+  try {
+    await electronUpdater.autoUpdater.checkForUpdates();
+  } catch (err) {
+    const msg = err?.message ?? String(err);
+    broadcast(IPC.UPDATE_ERROR, msg);
+    console.error("[updater] checkForUpdates failed:", msg);
+  }
+}
+async function downloadUpdate() {
+  try {
+    await electronUpdater.autoUpdater.downloadUpdate();
+  } catch (err) {
+    console.error("[updater] downloadUpdate failed:", err);
+  }
+}
+function installUpdate() {
+  if (utils.is.dev) {
+    broadcast(IPC.UPDATE_ERROR, "Install not available in dev mode — use a packaged build to test installation");
+    return;
+  }
+  electronUpdater.autoUpdater.quitAndInstall(false, true);
+}
+function setAutoDownload(enabled) {
+  electronUpdater.autoUpdater.autoDownload = enabled;
+}
+function startPolling(intervalHours) {
+  stopPolling();
+  const ms = Math.max(1, intervalHours) * 60 * 60 * 1e3;
+  pollTimer = setInterval(() => checkForUpdates(), ms);
+}
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
   }
 }
 function registerIpcHandlers(win) {
@@ -784,6 +878,21 @@ function registerIpcHandlers(win) {
       popup.loadFile(path.join(__dirname, "../renderer/index.html"), { query: { panel: connectionId } });
     }
   });
+  electron.ipcMain.handle(IPC.UPDATE_CHECK, async () => {
+    await checkForUpdates();
+  });
+  electron.ipcMain.handle(IPC.UPDATE_DOWNLOAD, async () => {
+    await downloadUpdate();
+  });
+  electron.ipcMain.handle(IPC.UPDATE_INSTALL, () => {
+    installUpdate();
+  });
+  electron.ipcMain.handle(IPC.UPDATE_SET_AUTO, (_evt, enabled) => {
+    setAutoDownload(enabled);
+  });
+  electron.ipcMain.handle(IPC.UPDATE_SET_INTERVAL, (_evt, hours) => {
+    startPolling(hours);
+  });
 }
 async function cleanupIpc() {
   await stopScan();
@@ -831,6 +940,9 @@ electron.app.whenReady().then(() => {
   electron.app.on("activate", () => {
     if (electron.BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+  setupUpdater(true);
+  setTimeout(() => checkForUpdates(), 4e3);
+  startPolling(6);
 });
 electron.app.on("window-all-closed", () => {
   if (process.platform !== "darwin") electron.app.quit();

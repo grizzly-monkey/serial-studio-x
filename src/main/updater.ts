@@ -13,10 +13,9 @@ function broadcast(channel: string, data?: unknown): void {
 }
 
 export function setupUpdater(autoDownload: boolean): void {
-  if (is.dev) return
-
   autoUpdater.autoDownload = autoDownload
   autoUpdater.autoInstallOnAppQuit = false
+  autoUpdater.forceDevUpdateConfig = true
 
   // Register event listeners once only
   if (listenersRegistered) return
@@ -64,16 +63,17 @@ export function setupUpdater(autoDownload: boolean): void {
 }
 
 export async function checkForUpdates(): Promise<void> {
-  if (is.dev) return
+  broadcast(IPC.UPDATE_CHECKING)
   try {
     await autoUpdater.checkForUpdates()
   } catch (err) {
-    console.error('[updater] checkForUpdates failed:', err)
+    const msg = (err as Error)?.message ?? String(err)
+    broadcast(IPC.UPDATE_ERROR, msg)
+    console.error('[updater] checkForUpdates failed:', msg)
   }
 }
 
 export async function downloadUpdate(): Promise<void> {
-  if (is.dev) return
   try {
     await autoUpdater.downloadUpdate()
   } catch (err) {
@@ -82,16 +82,18 @@ export async function downloadUpdate(): Promise<void> {
 }
 
 export function installUpdate(): void {
-  if (is.dev) return
+  if (is.dev) {
+    broadcast(IPC.UPDATE_ERROR, 'Install not available in dev mode — use a packaged build to test installation')
+    return
+  }
   autoUpdater.quitAndInstall(false, true)
 }
 
 export function setAutoDownload(enabled: boolean): void {
-  if (!is.dev) autoUpdater.autoDownload = enabled
+  autoUpdater.autoDownload = enabled
 }
 
 export function startPolling(intervalHours: number): void {
-  if (is.dev) return
   stopPolling()
   const ms = Math.max(1, intervalHours) * 60 * 60 * 1000
   pollTimer = setInterval(() => checkForUpdates(), ms)
