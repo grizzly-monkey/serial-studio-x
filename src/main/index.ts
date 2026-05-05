@@ -2,6 +2,14 @@ import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { registerIpcHandlers, cleanupIpc } from './ipc-router'
+import { killAll } from './worker-registry'
+
+// Suppress broken-pipe / stdio errors that fire when utility-process workers
+// exit during app shutdown and the parent tries to write to the dead pipe.
+process.on('uncaughtException', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EIO' || err.code === 'EPIPE' || err.code === 'ERR_STREAM_DESTROYED') return
+  console.error('[main] uncaughtException:', err)
+})
 
 let mainWindow: BrowserWindow | null = null
 
@@ -21,7 +29,10 @@ function createWindow(): void {
     }
   })
 
-  mainWindow.on('ready-to-show', () => mainWindow!.show())
+  mainWindow.on('ready-to-show', () => {
+    mainWindow!.show()
+    if (is.dev) mainWindow!.webContents.openDevTools()
+  })
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
@@ -45,6 +56,18 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
-  cleanupIpc()
   if (process.platform !== 'darwin') app.quit()
+})
+
+let _quitting = false
+app.on('before-quit', (event) => {
+  if (_quitting) return
+  event.preventDefault()
+  _quitting = true
+  // Send stop to all workers and give them time to close their connections
+  killAll()
+  setTimeout(() => {
+    cleanupIpc()
+    app.quit()
+  }, 1500)
 })

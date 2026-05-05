@@ -46,7 +46,7 @@ export default function TopBar(): React.JSX.Element {
       boxShadow: 'var(--shadow)', zIndex: 100, position: 'relative', flexShrink: 0
     }}>
       <span style={{ fontWeight: 800, fontSize: 15, color: 'var(--primary)', letterSpacing: -0.3 }}>
-        ⚡ modbus-storm
+        ⚡ Serial Studio X
       </span>
 
       <div style={{ width: 1, height: 24, background: 'var(--border)' }} />

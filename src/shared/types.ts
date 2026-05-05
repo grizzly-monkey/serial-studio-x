@@ -2,7 +2,7 @@ export type Protocol = 'tcp' | 'rtu' | 'ascii'
 export type DisplayBase = 'hex' | 'dec' | 'inherit'
 export type DataType = 'uint16' | 'int16' | 'float32' | 'uint32' | 'int32' | 'binary' | 'hex' | 'ascii'
 export type WidgetType = 'table' | 'sparkline' | 'gauge'
-export type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'error'
+export type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'disconnecting' | 'error'
 export type AlertState = 'ok' | 'low' | 'high'
 export type ReadFC = 1 | 2 | 3 | 4 | 23
 
@@ -110,6 +110,7 @@ export interface WorkerPollResult {
   startAddress: number
   values: number[]
   timestamp: number
+  rxHex: string
   rawFrame?: RawFrame
 }
 

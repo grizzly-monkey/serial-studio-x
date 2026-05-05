@@ -1,5 +1,5 @@
 import { Notification } from 'electron'
-import type { RegisterConfig, AlertState } from '../shared/types'
+import {AlertState, RegisterConfig} from "../shared/types";
 
 const alertStates = new Map<string, AlertState>()
 

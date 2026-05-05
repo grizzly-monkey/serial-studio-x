@@ -22,7 +22,7 @@ interface Props {
 }
 
 export default function RawFrameInspector({ connectionId, connection }: Props): React.JSX.Element {
-  const frames = useConnectionsStore(s => s.rawFrames[connectionId] ?? [])
+  const frames = useConnectionsStore(s => s.rawFrames[connectionId]) ?? []
   const [tab, setTab] = useState<'monitor' | 'builder'>('monitor')
   const [builderFc, setBuilderFc] = useState(3)
   const [builderAddr, setBuilderAddr] = useState('0')

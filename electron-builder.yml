@@ -1,7 +1,6 @@
-appId: com.modbusstorm.app
-productName: modbus-storm
-copyright: Copyright © 2026 modbus-storm contributors
-license: GPL-3.0
+appId: com.grw.modbus-storm
+productName: Modbus Storm
+copyright: Copyright © 2026 Modbus Storm contributors
 
 directories:
   buildResources: resources
@@ -14,6 +13,29 @@ files:
 extraMetadata:
   main: out/main/index.js
 
+# Artifact filename template — includes arch so arm64/x64 DMGs are clearly named
+artifactName: "${productName}-${version}-${arch}.${ext}"
+
+# ── macOS ────────────────────────────────────────────────────────────────────
+# Arch is passed via CLI (--arch arm64 or --arch x64) from the CI matrix.
+# Each runner (macos-latest = arm64, macos-13 = x64) builds natively so that
+# serialport and other native modules link against the correct architecture.
+mac:
+  target:
+    - target: dmg
+    - target: zip
+  icon: resources/icons/icon.icns
+  category: public.app-category.developer-tools
+  # hardenedRuntime + entitlements required for notarization (optional)
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.plist
+
+dmg:
+  sign: false   # set to true when notarization credentials are configured
+
+# ── Windows ──────────────────────────────────────────────────────────────────
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
@@ -29,15 +51,7 @@ win:
       arch: [x64]
   icon: resources/icons/icon.ico
 
-mac:
-  target:
-    - target: dmg
-      arch: [universal]
-    - target: zip
-      arch: [universal]
-  icon: resources/icons/icon.icns
-  category: public.app-category.developer-tools
-
+# ── Linux ────────────────────────────────────────────────────────────────────
 linux:
   target:
     - target: AppImage
@@ -49,6 +63,7 @@ linux:
   icon: resources/icons/
   category: Development
 
+# ── Publishing ───────────────────────────────────────────────────────────────
 publish:
   provider: github
   releaseType: release

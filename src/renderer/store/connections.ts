@@ -7,13 +7,15 @@ interface ConnectionLiveState {
   registerValues: Record<number, RegisterValue>
   sparklineData: Record<number, SparklinePoint[]>
   loggingActive: boolean
+  pollingPaused: boolean
 }
 
 const defaultConnState = (): ConnectionLiveState => ({
   status: 'idle',
   registerValues: {},
   sparklineData: {},
-  loggingActive: false
+  loggingActive: false,
+  pollingPaused: false,
 })
 
 interface ConnectionsStore {
@@ -24,6 +26,9 @@ interface ConnectionsStore {
   setRegisterValues: (id: string, values: RegisterValue[], addresses: number[]) => void
   appendSparkline: (id: string, address: number, point: SparklinePoint, maxPoints: number) => void
   setLogging: (id: string, active: boolean) => void
+  setPollPaused: (id: string, paused: boolean) => void
+  clearLog: () => void
+  clearConnectionLog: (connectionId: string) => void
   appendLog: (entry: LogEntry) => void
   appendFrame: (connectionId: string, frame: RawFrame) => void
   removeConnection: (id: string) => void
@@ -70,6 +75,21 @@ export const useConnectionsStore = create<ConnectionsStore>((set) => ({
         ...state.connections,
         [id]: { ...(state.connections[id] ?? defaultConnState()), loggingActive: active }
       }
+    })),
+
+  setPollPaused: (id, paused) =>
+    set((state) => ({
+      connections: {
+        ...state.connections,
+        [id]: { ...(state.connections[id] ?? defaultConnState()), pollingPaused: paused }
+      }
+    })),
+
+  clearLog: () => set({ logEntries: [] }),
+
+  clearConnectionLog: (connectionId) =>
+    set((state) => ({
+      logEntries: state.logEntries.filter(e => e.connectionId !== connectionId)
     })),
 
   appendLog: (entry) =>

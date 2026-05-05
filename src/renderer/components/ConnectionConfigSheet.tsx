@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { v4 as uuid } from 'uuid'
 import { useWorkspaceStore } from '../store/workspace'
+import SlaveScanner from './SlaveScanner'
 import type { ConnectionConfig, Protocol } from '../../shared/types'
 
 interface Props {
@@ -16,13 +17,31 @@ export default function ConnectionConfigSheet({ initial, onClose }: Props): Reac
   const [port, setPort] = useState(initial?.port ?? 502)
   const [unitId, setUnitId] = useState(initial?.unitId ?? 1)
   const [serialPort, setSerialPort] = useState(initial?.serialPort ?? '')
+  const [availablePorts, setAvailablePorts] = useState<string[]>([])
+  const [portsLoading, setPortsLoading] = useState(false)
   const [baudRate, setBaudRate] = useState(initial?.baudRate ?? 9600)
   const [dataBits, setDataBits] = useState<5|6|7|8>(initial?.dataBits ?? 8)
   const [stopBits, setStopBits] = useState<1|2>(initial?.stopBits ?? 1)
   const [parity, setParity] = useState(initial?.parity ?? 'none')
   const [flowControl, setFlowControl] = useState(initial?.flowControl ?? 'none')
   const [slaveId, setSlaveId] = useState(initial?.slaveId ?? 1)
-  const [pollIntervalMs, setPollIntervalMs] = useState(initial?.pollIntervalMs ?? 1000)
+  const [pollIntervalMs, setPollIntervalMs] = useState(initial?.pollIntervalMs ?? 5000)
+  const [scannerOpen, setScannerOpen] = useState(false)
+
+  const loadPorts = async () => {
+    setPortsLoading(true)
+    try {
+      const ports = await window.api.listSerialPorts()
+      setAvailablePorts(ports)
+      if (ports.length > 0 && !serialPort) setSerialPort(ports[0])
+    } finally {
+      setPortsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (protocol !== 'tcp') loadPorts()
+  }, [protocol])
 
   const handleSave = async () => {
     const config: ConnectionConfig = {
@@ -33,13 +52,37 @@ export default function ConnectionConfigSheet({ initial, onClose }: Props): Reac
       pollIntervalMs,
       registerGroups: initial?.registerGroups ?? [],
     }
-    if (initial) updateConnection(initial.id, config)
-    else addConnection(config)
+    if (initial) {
+      updateConnection(initial.id, config)
+    } else {
+      addConnection(config)
+    }
     await window.api.connectConnection(config)
     onClose()
   }
 
+  // Build a partial ConnectionConfig from current form values for the scanner
+  const scanConfig: ConnectionConfig = {
+    id: initial?.id ?? '',
+    name: name.trim() || serialPort,
+    protocol,
+    serialPort, baudRate, dataBits, stopBits,
+    parity: parity as ConnectionConfig['parity'],
+    flowControl: flowControl as ConnectionConfig['flowControl'],
+    slaveId,
+    pollIntervalMs,
+    registerGroups: [],
+  }
+
   return (
+    <>
+    {scannerOpen && (
+      <SlaveScanner
+        config={scanConfig}
+        onUse={(id) => setSlaveId(id)}
+        onClose={() => setScannerOpen(false)}
+      />
+    )}
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200, display: 'flex', justifyContent: 'flex-end' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div style={{ width: 400, background: 'var(--surface)', padding: 24, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14, boxShadow: '-4px 0 24px rgba(0,0,0,0.15)' }}>
@@ -75,7 +118,38 @@ export default function ConnectionConfigSheet({ initial, onClose }: Props): Reac
         ) : (
           <>
             <Field label="Serial Port">
-              <input value={serialPort} onChange={e => setSerialPort(e.target.value)} placeholder="/dev/ttyUSB0 or COM3" style={inputStyle} />
+              <div style={{ display: 'flex', gap: 6 }}>
+                <select
+                  value={serialPort}
+                  onChange={e => setSerialPort(e.target.value)}
+                  style={{ ...inputStyle, flex: 1 }}
+                >
+                  {availablePorts.length === 0 && (
+                    <option value="">
+                      {portsLoading ? 'Scanning…' : 'No ports found'}
+                    </option>
+                  )}
+                  {availablePorts.map(p => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                  {serialPort && !availablePorts.includes(serialPort) && (
+                    <option value={serialPort}>{serialPort}</option>
+                  )}
+                </select>
+                <button
+                  onClick={loadPorts}
+                  disabled={portsLoading}
+                  title="Refresh port list"
+                  style={{
+                    background: 'var(--surface-2)', border: '1px solid var(--border)',
+                    borderRadius: 4, padding: '0 10px', cursor: 'pointer',
+                    color: 'var(--text)', fontSize: 13, flexShrink: 0,
+                    opacity: portsLoading ? 0.5 : 1
+                  }}
+                >
+                  ↺
+                </button>
+              </div>
             </Field>
             <Field label="Baud Rate">
               <select value={baudRate} onChange={e => setBaudRate(+e.target.value)} style={inputStyle}>
@@ -108,13 +182,40 @@ export default function ConnectionConfigSheet({ initial, onClose }: Props): Reac
               </select>
             </Field>
             <Field label="Slave ID">
-              <input type="number" value={slaveId} onChange={e => setSlaveId(+e.target.value)} min={1} max={247} style={inputStyle} />
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input
+                  type="number"
+                  value={slaveId}
+                  onChange={e => setSlaveId(+e.target.value)}
+                  min={1} max={247}
+                  style={{ ...inputStyle, flex: 1 }}
+                />
+                <button
+                  onClick={() => setScannerOpen(true)}
+                  title="Scan for slave addresses"
+                  style={{
+                    background: 'var(--surface-2)', border: '1px solid var(--border)',
+                    borderRadius: 4, padding: '0 10px', cursor: 'pointer',
+                    color: 'var(--primary)', fontSize: 13, flexShrink: 0, fontWeight: 600
+                  }}
+                >
+                  🔍 Scan
+                </button>
+              </div>
             </Field>
           </>
         )}
 
-        <Field label="Poll Interval (ms)">
-          <input type="number" value={pollIntervalMs} onChange={e => setPollIntervalMs(Math.max(50, +e.target.value))} min={50} style={inputStyle} />
+        <Field label={`Poll Interval (ms) · ${pollIntervalMs >= 3600000 ? '1h' : pollIntervalMs >= 60000 ? `${Math.round(pollIntervalMs/60000)}m` : `${(pollIntervalMs/1000).toFixed(1).replace(/\.0$/,'')}s`}`}>
+          <input
+            type="number"
+            value={pollIntervalMs}
+            onChange={e => setPollIntervalMs(Math.max(2000, Math.min(3_600_000, +e.target.value)))}
+            min={2000}
+            max={3600000}
+            step={1000}
+            style={inputStyle}
+          />
         </Field>
 
         <button onClick={handleSave} style={{
@@ -125,6 +226,7 @@ export default function ConnectionConfigSheet({ initial, onClose }: Props): Reac
         </button>
       </div>
     </div>
+    </>
   )
 }
 

@@ -1,20 +1,24 @@
 {
-  "name": "modbus-storm",
+  "name": "serial-studio-x",
   "version": "0.1.0",
-  "description": "A beautiful, production-ready open-source Modbus client",
+  "description": "A beautiful, production-ready open-source serial protocol client",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "dist": "npm run build && electron-builder",
-    "dist:win": "npm run build && electron-builder --win",
-    "dist:mac": "npm run build && electron-builder --mac",
-    "dist:linux": "npm run build && electron-builder --linux",
+    "dist": "npm run build && electron-builder --publish never",
+    "dist:win": "npm run build && electron-builder --win --publish never",
+    "dist:mac": "npm run build && electron-builder --mac --publish never",
+    "dist:linux": "npm run build && electron-builder --linux --publish never",
     "test": "echo \"No tests yet\""
   },
-  "author": "modbus-storm contributors",
+  "author": "Serial Studio X contributors",
   "license": "GPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/grw-io/serial-studio-x"
+  },
   "devDependencies": {
     "@electron-toolkit/tsconfig": "^2.0.0",
     "@types/electron": "^1.4.38",

@@ -23,7 +23,26 @@ const api = {
   stopLogging: (connectionId: string): Promise<void> =>
     ipcRenderer.invoke(IPC.LOG_STOP, connectionId),
 
+  pausePolling: (connectionId: string): Promise<void> =>
+    ipcRenderer.invoke(IPC.POLLING_PAUSE, connectionId),
+  resumePolling: (connectionId: string): Promise<void> =>
+    ipcRenderer.invoke(IPC.POLLING_RESUME, connectionId),
+
   listSerialPorts: (): Promise<string[]> => ipcRenderer.invoke(IPC.SERIAL_PORTS_LIST),
+
+  scanStart: (config: ConnectionConfig, timeoutMs: number): Promise<void> =>
+    ipcRenderer.invoke(IPC.SCAN_START, { config, timeoutMs }),
+  scanStop: (): Promise<void> => ipcRenderer.invoke(IPC.SCAN_STOP),
+  onScanProgress: (cb: (data: unknown) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, data: unknown) => cb(data)
+    ipcRenderer.on(IPC.SCAN_PROGRESS, handler)
+    return () => ipcRenderer.removeListener(IPC.SCAN_PROGRESS, handler)
+  },
+  onScanDone: (cb: (data: unknown) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, data: unknown) => cb(data)
+    ipcRenderer.on(IPC.SCAN_DONE, handler)
+    return () => ipcRenderer.removeListener(IPC.SCAN_DONE, handler)
+  },
 
   onPollResult: (cb: (data: unknown) => void) => {
     const handler = (_: Electron.IpcRendererEvent, data: unknown) => cb(data)

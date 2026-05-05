@@ -1,24 +1,39 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import TopBar from './components/TopBar'
 import Sidebar from './components/Sidebar'
 import Dashboard from './components/Dashboard'
 import LogDrawer from './components/LogDrawer'
 import { useWorkspaceStore } from './store/workspace'
 import { useConnectionsStore } from './store/connections'
+import type { LogEntry } from '../shared/types'
 
 export default function App(): React.JSX.Element {
   const theme = useWorkspaceStore(s => s.workspace.settings.theme)
   const connections = useWorkspaceStore(s => s.workspace.connections)
   const { setStatus, setRegisterValues, appendSparkline, appendLog } = useConnectionsStore()
+  const shownErrors = useRef<Set<string>>(new Set())
+  const [errorToast, setErrorToast] = useState<{ connectionName: string; message: string } | null>(null)
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
   }, [theme])
 
   useEffect(() => {
+    console.log('[app] registering IPC listeners, connections:', connections.map(c => c.id))
+
     const offStatus = window.api.onConnectionStatus((data: unknown) => {
       const d = data as { connectionId: string; status: string; error?: string }
+      console.log(`[app] status: ${d.connectionId} → ${d.status}${d.error ? ' err=' + d.error : ''}`)
       setStatus(d.connectionId, d.status as any, d.error)
+
+      if (d.status === 'error' && d.error && !shownErrors.current.has(d.connectionId)) {
+        shownErrors.current.add(d.connectionId)
+        const conn = connections.find(c => c.id === d.connectionId)
+        setErrorToast({ connectionName: conn?.name ?? d.connectionId, message: d.error! })
+      }
+      if (d.status === 'connecting') {
+        shownErrors.current.delete(d.connectionId)
+      }
     })
 
     const offPoll = window.api.onPollResult((batch: unknown) => {
@@ -29,15 +44,28 @@ export default function App(): React.JSX.Element {
         transformed: Array<{ raw: number; decoded: number | string; timestamp: number; alertState: string }>
       }>
 
+      console.log('[app] onPollResult fired, keys:', Object.keys(b))
+
       for (const key of Object.keys(b)) {
         const item = b[key]
-        if (!item?.transformed) continue
+        if (!item?.transformed) {
+          console.warn('[app] item has no transformed:', key, item)
+          continue
+        }
 
         const conn = connections.find(c => c.id === item.connectionId)
-        if (!conn) continue
+        if (!conn) {
+          console.warn('[app] connection not found for id:', item.connectionId, 'known:', connections.map(c => c.id))
+          continue
+        }
 
         const group = conn.registerGroups.find(g => g.id === item.groupId)
-        if (!group) continue
+        if (!group) {
+          console.warn('[app] group not found:', item.groupId, 'in conn', item.connectionId, 'groups:', conn.registerGroups.map(g => g.id))
+          continue
+        }
+
+        console.log(`[app] processing ${item.transformed.length} register(s) for "${conn.name}" / "${group.label}"`)
 
         const addresses = group.registers.map(r => r.address)
         setRegisterValues(item.connectionId, item.transformed as any, addresses)
@@ -45,39 +73,23 @@ export default function App(): React.JSX.Element {
         item.transformed.forEach((rv, i) => {
           const reg = group.registers[i]
           if (!reg || typeof rv.decoded !== 'number') return
-
           const maxPts = Math.max(10, Math.ceil(reg.sparklineWindowSecs * 1000 / conn.pollIntervalMs))
           appendSparkline(item.connectionId, reg.address, { timestamp: rv.timestamp, value: rv.decoded }, maxPts)
         })
 
-        // Append log (throttle to avoid flooding: sample every 10th entry per group)
-        const shouldLog = Math.random() < 0.1 || item.transformed.some((rv: any) => rv.alertState !== 'ok')
-        if (shouldLog) {
-          item.transformed.forEach((rv, i) => {
-            const reg = group.registers[i]
-            if (!reg) return
-            appendLog({
-              id: `${item.connectionId}-${item.timestamp}-${i}`,
-              timestamp: rv.timestamp,
-              connectionId: item.connectionId,
-              connectionName: conn.name,
-              direction: 'rx',
-              fc: group.functionCode,
-              address: reg.address,
-              rawHex: '0x' + rv.raw.toString(16).toUpperCase().padStart(4, '0'),
-              rawDec: String(rv.raw),
-              decodedValue: String(rv.decoded),
-              unit: reg.unit,
-              status: rv.alertState !== 'ok' ? 'alert' : 'ok'
-            })
-          })
-        }
+        // RX log entries (with full raw frame) are emitted by worker-registry → IPC.LOG_ENTRY
       }
+    })
+
+    // Receive TX frame log entries pushed from main (worker tx-log messages)
+    const offLogEntry = window.api.onLogEntry((entry: unknown) => {
+      appendLog(entry as LogEntry)
     })
 
     return () => {
       offStatus()
       offPoll()
+      offLogEntry()
     }
   }, [connections])
 
@@ -89,6 +101,29 @@ export default function App(): React.JSX.Element {
         <Dashboard />
       </div>
       <LogDrawer />
+
+      {errorToast && (
+        <div style={{
+          position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
+          background: 'var(--danger)', color: '#fff',
+          borderRadius: 8, padding: '14px 18px', maxWidth: 360,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
+          display: 'flex', flexDirection: 'column', gap: 6
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontWeight: 700, fontSize: 13 }}>
+              Connection failed — {errorToast.connectionName}
+            </span>
+            <button
+              onClick={() => setErrorToast(null)}
+              style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0 }}
+            >
+              ✕
+            </button>
+          </div>
+          <span style={{ fontSize: 12, opacity: 0.9 }}>{errorToast.message}</span>
+        </div>
+      )}
     </div>
   )
 }

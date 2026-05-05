@@ -13,7 +13,11 @@ export default function Sidebar(): React.JSX.Element {
 
   const statusColor = (id: string) => {
     const s = statuses[id]?.status ?? 'idle'
-    return s === 'connected' ? 'var(--success)' : s === 'connecting' ? 'var(--warning)' : s === 'error' ? 'var(--danger)' : 'var(--text-muted)'
+    if (s === 'connected') return 'var(--success)'
+    if (s === 'connecting') return 'var(--warning)'
+    if (s === 'disconnecting') return 'var(--warning)'
+    if (s === 'error') return 'var(--danger)'
+    return 'var(--text-muted)'
   }
 
   const statusLabel = (id: string) => statuses[id]?.status ?? 'idle'
@@ -54,7 +58,7 @@ export default function Sidebar(): React.JSX.Element {
                 </span>
                 <span>{statusLabel(conn.id)}</span>
                 <span>·</span>
-                <span>{conn.pollIntervalMs}ms</span>
+                <span>{conn.pollIntervalMs >= 1000 ? `${conn.pollIntervalMs / 1000}s` : `${conn.pollIntervalMs}ms`}</span>
               </div>
             </div>
             <div style={{ display: 'flex', gap: 2 }}>
@@ -64,16 +68,26 @@ export default function Sidebar(): React.JSX.Element {
           </div>
         ))}
 
-        <button
-          onClick={() => { setEditing(null); setSheetOpen(true) }}
-          style={{
+        {connections.length < 10 ? (
+          <button
+            onClick={() => { setEditing(null); setSheetOpen(true) }}
+            style={{
+              marginTop: 6, padding: '8px 10px', borderRadius: 'var(--radius)',
+              border: '1px dashed var(--border)', background: 'none', cursor: 'pointer',
+              color: 'var(--primary)', fontSize: 12, fontWeight: 600, textAlign: 'left'
+            }}
+          >
+            + New Connection
+          </button>
+        ) : (
+          <div style={{
             marginTop: 6, padding: '8px 10px', borderRadius: 'var(--radius)',
-            border: '1px dashed var(--border)', background: 'none', cursor: 'pointer',
-            color: 'var(--primary)', fontSize: 12, fontWeight: 600, textAlign: 'left'
-          }}
-        >
-          + New Connection
-        </button>
+            border: '1px dashed var(--border)', fontSize: 11, color: 'var(--text-muted)',
+            textAlign: 'center', lineHeight: 1.5
+          }}>
+            Max 10 connections reached
+          </div>
+        )}
       </aside>
 
       {sheetOpen && (

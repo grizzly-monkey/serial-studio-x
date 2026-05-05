@@ -20,4 +20,10 @@ export const IPC = {
   RAW_FRAME: 'raw:frame',
   LOG_ENTRY: 'log:entry',
   ALERT_FIRED: 'alert:fired',
+  POLLING_PAUSE: 'polling:pause',
+  POLLING_RESUME: 'polling:resume',
+  SCAN_START: 'scan:start',
+  SCAN_STOP: 'scan:stop',
+  SCAN_PROGRESS: 'scan:progress',
+  SCAN_DONE: 'scan:done',
 } as const

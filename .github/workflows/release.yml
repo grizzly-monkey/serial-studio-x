@@ -5,33 +5,84 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   build:
+    name: Build — ${{ matrix.name }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          # macOS Apple Silicon (M1/M2/M3/M4) — arm64
+          - name: macOS Apple Silicon
+            os: macos-latest
+            arch: arm64
+            build_flag: --mac
+            platform: mac
+
+          # macOS Intel — x86_64
+          - name: macOS Intel
+            os: macos-13
+            arch: x64
+            build_flag: --mac
+            platform: mac
+
+          # Windows x64
+          - name: Windows x64
+            os: windows-latest
+            arch: x64
+            build_flag: --win
+            platform: win
+
+          # Linux x64
+          - name: Linux x64
+            os: ubuntu-latest
+            arch: x64
+            build_flag: --linux
+            platform: linux
+
     runs-on: ${{ matrix.os }}
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-      - run: npm ci
-      - run: npx electron-rebuild
-      - run: npm run build
-      - name: Package Linux
-        if: matrix.os == 'ubuntu-latest'
-        run: npx electron-builder --linux --publish always
+
+      - name: Install Linux build deps
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y libudev-dev libusb-1.0-0-dev rpm fakeroot dpkg
+
+      - name: Set up Python (Windows)
+        if: matrix.platform == 'win'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rebuild native modules
+        run: npx electron-rebuild --arch ${{ matrix.arch }}
+
+      - name: Build app
+        run: npm run build
+
+      - name: Package and publish
+        run: npx electron-builder ${{ matrix.build_flag }} --arch ${{ matrix.arch }} --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Package macOS
-        if: matrix.os == 'macos-latest'
-        run: npx electron-builder --mac --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Package Windows
-        if: matrix.os == 'windows-latest'
-        run: npx electron-builder --win --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Uncomment and configure the secrets below to enable macOS code signing + notarization:
+          # CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          # CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          # APPLE_ID: ${{ secrets.APPLE_ID }}
+          # APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
