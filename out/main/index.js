@@ -746,9 +746,9 @@ function registerIpcHandlers(win) {
         return a.path.localeCompare(b.path);
       });
       return ports.map((p) => {
-        const extra = p.friendlyName ?? p.manufacturer ?? "";
-        const label = extra && !extra.includes(p.path) ? `${p.path} — ${extra}` : p.path;
-        return { path: p.path, label };
+        if (p.friendlyName) return { path: p.path, label: p.friendlyName };
+        const extra = p.manufacturer ?? "";
+        return { path: p.path, label: extra ? `${p.path} — ${extra}` : p.path };
       });
     } catch {
       return [];

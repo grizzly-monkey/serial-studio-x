@@ -1,12 +1,4 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="GOROOT" url="file:///opt/software/go/sdk/go1.24.11" />
-  <component name="GoImports">
-    <option name="excludedPackages">
-      <array>
-        <option value="github.com/pkg/errors" />
-        <option value="golang.org/x/net/context" />
-      </array>
-    </option>
-  </component>
+  <component name="GOROOT" url="file://$PROJECT_DIR$/../../software/go/sdk/go1.24.11" />
 </project>

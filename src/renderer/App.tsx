@@ -4,6 +4,7 @@ import MenuBar from './components/MenuBar'
 import Sidebar from './components/Sidebar'
 import Dashboard from './components/Dashboard'
 import LogDrawer from './components/LogDrawer'
+import GrowlocMenu from './components/GrowlocMenu'
 import { useWorkspaceStore } from './store/workspace'
 import { useConnectionsStore } from './store/connections'
 import type { LogEntry } from '../shared/types'
@@ -14,10 +15,30 @@ export default function App(): React.JSX.Element {
   const { setStatus, setRegisterValues, appendSparkline, appendLog, popOut, popIn } = useConnectionsStore()
   const shownErrors = useRef<Set<string>>(new Set())
   const [errorToast, setErrorToast] = useState<{ connectionName: string; message: string } | null>(null)
+  const [showGrowloc, setShowGrowloc] = useState(false)
+  const gPressCount = useRef(0)
+  const gPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
   }, [theme])
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key !== 'g' && e.key !== 'G') { gPressCount.current = 0; return }
+      gPressCount.current++
+      if (gPressTimer.current) clearTimeout(gPressTimer.current)
+      gPressTimer.current = setTimeout(() => { gPressCount.current = 0 }, 2000)
+      if (gPressCount.current >= 4) {
+        gPressCount.current = 0
+        if (gPressTimer.current) clearTimeout(gPressTimer.current)
+        setShowGrowloc(true)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   useEffect(() => {
     console.log('[app] registering IPC listeners, connections:', connections.map(c => c.id))
@@ -108,6 +129,8 @@ export default function App(): React.JSX.Element {
         <Dashboard />
       </div>
       <LogDrawer />
+
+      {showGrowloc && <GrowlocMenu onClose={() => setShowGrowloc(false)} />}
 
       {errorToast && (
         <div style={{
