@@ -1,6 +1,35 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); overflow: hidden; }
+body { font-family: var(--font-ui, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif); background: var(--bg); color: var(--text); overflow: hidden; }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* Terminal theme overrides — sharp corners and monospace inputs */
+[data-theme="hacker"] button,
+[data-theme="hacker"] input,
+[data-theme="hacker"] textarea,
+[data-theme="hacker"] select { border-radius: 0 !important; }
+
+[data-theme="hacker"] input,
+[data-theme="hacker"] textarea { font-family: var(--font-mono) !important; }
+
+[data-theme="hacker"] :is(button, [role="button"]):not([disabled]):hover {
+  box-shadow: 0 0 8px var(--primary); outline: 1px solid var(--primary);
+}
+
+[data-theme="cyberpunk"] button,
+[data-theme="cyberpunk"] input,
+[data-theme="cyberpunk"] textarea,
+[data-theme="cyberpunk"] select { border-radius: 0 !important; }
+
+[data-theme="cyberpunk"] :is(button, [role="button"]):not([disabled]):hover {
+  box-shadow: 0 0 12px var(--primary), 0 0 24px var(--primary)44;
+}
+
+[data-theme="monokai"] button,
+[data-theme="monokai"] input,
+[data-theme="monokai"] textarea { border-radius: 3px !important; }
+
+[data-theme="monokai"] input,
+[data-theme="monokai"] textarea { font-family: var(--font-mono) !important; }

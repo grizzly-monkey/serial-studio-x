@@ -8,6 +8,7 @@ export default function Sidebar(): React.JSX.Element {
   const connections = useWorkspaceStore(s => s.workspace.connections)
   const { removeConnection } = useWorkspaceStore()
   const statuses = useConnectionsStore(s => s.connections)
+  const { setStatus } = useConnectionsStore()
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editing, setEditing] = useState<ConnectionConfig | null>(null)
 
@@ -22,7 +23,16 @@ export default function Sidebar(): React.JSX.Element {
 
   const statusLabel = (id: string) => statuses[id]?.status ?? 'idle'
 
+  const handleConnect = async (conn: ConnectionConfig) => {
+    await window.api.connectConnection(conn)
+  }
+
   const handleDisconnect = async (id: string) => {
+    await window.api.disconnectConnection(id)
+    setStatus(id, 'idle')
+  }
+
+  const handleDelete = async (id: string) => {
     await window.api.disconnectConnection(id)
     removeConnection(id)
   }
@@ -53,17 +63,31 @@ export default function Sidebar(): React.JSX.Element {
                 {conn.name}
               </div>
               <div style={{ fontSize: 10, color: 'var(--text-muted)', display: 'flex', gap: 4, marginTop: 1 }}>
-                <span style={{ background: 'var(--primary-light)', color: 'var(--primary)', padding: '0px 4px', borderRadius: 3, fontWeight: 600 }}>
-                  {conn.protocol.toUpperCase()}
+                <span style={{ background: conn.protocol === 'serial-terminal' ? 'rgba(34,197,94,0.15)' : 'var(--primary-light)', color: conn.protocol === 'serial-terminal' ? 'var(--success)' : 'var(--primary)', padding: '0px 4px', borderRadius: 3, fontWeight: 600 }}>
+                  {conn.protocol === 'serial-terminal' ? 'TERM' : conn.protocol.toUpperCase()}
                 </span>
                 <span>{statusLabel(conn.id)}</span>
-                <span>·</span>
-                <span>{conn.pollIntervalMs >= 1000 ? `${conn.pollIntervalMs / 1000}s` : `${conn.pollIntervalMs}ms`}</span>
+                {conn.protocol !== 'serial-terminal' && (
+                  <><span>·</span><span>{conn.pollIntervalMs >= 1000 ? `${conn.pollIntervalMs / 1000}s` : `${conn.pollIntervalMs}ms`}</span></>
+                )}
               </div>
             </div>
             <div style={{ display: 'flex', gap: 2 }}>
+              {(() => {
+                const s = statuses[conn.id]?.status ?? 'idle'
+                const isActive = s === 'connected' || s === 'connecting'
+                return (
+                  <button
+                    onClick={() => isActive ? handleDisconnect(conn.id) : handleConnect(conn)}
+                    style={{ ...iconBtn, color: isActive ? 'var(--danger)' : 'var(--success)', opacity: 0.8 }}
+                    title={isActive ? 'Disconnect' : 'Connect'}
+                  >
+                    {isActive ? '⏹' : '▶'}
+                  </button>
+                )
+              })()}
               <button onClick={() => { setEditing(conn); setSheetOpen(true) }} style={iconBtn} title="Edit">✏️</button>
-              <button onClick={() => handleDisconnect(conn.id)} style={iconBtn} title="Remove">🗑</button>
+              <button onClick={() => handleDelete(conn.id)} style={{ ...iconBtn, color: 'var(--danger)', opacity: 0.7 }} title="Delete connection">🗑</button>
             </div>
           </div>
         ))}

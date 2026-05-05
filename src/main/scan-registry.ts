@@ -1,4 +1,10 @@
 import { utilityProcess, BrowserWindow } from 'electron'
+
+function broadcast(channel: string, data: unknown): void {
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (!w.isDestroyed()) w.webContents.send(channel, data)
+  }
+}
 import { join } from 'path'
 import { IPC } from '../shared/ipc-channels'
 import { killWorker } from './worker-registry'
@@ -30,13 +36,8 @@ export async function startScan(
   scanProcess.postMessage({ type: 'init', config, timeoutMs })
 
   scanProcess.on('message', (msg) => {
-    if (win.isDestroyed()) return
-    if (msg.type === 'progress') {
-      win.webContents.send(IPC.SCAN_PROGRESS, msg.payload)
-    }
-    if (msg.type === 'done') {
-      win.webContents.send(IPC.SCAN_DONE, msg.payload)
-    }
+    if (msg.type === 'progress') broadcast(IPC.SCAN_PROGRESS, msg.payload)
+    if (msg.type === 'done') broadcast(IPC.SCAN_DONE, msg.payload)
   })
 
   scanProcess.on('exit', () => { scanProcess = null })

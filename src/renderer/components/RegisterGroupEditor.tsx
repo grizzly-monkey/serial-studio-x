@@ -2,7 +2,8 @@ import React, { useState } from 'react'
 import { v4 as uuid } from 'uuid'
 import { useWorkspaceStore } from '../store/workspace'
 import { modbusRef } from './RegisterRow'
-import type { ConnectionConfig, RegisterGroup, RegisterConfig, ReadFC, DataType, WidgetType } from '../../shared/types'
+import { dataTypeRegCount } from '../../shared/types'
+import type { ConnectionConfig, RegisterGroup, RegisterConfig, ReadFC, DataType, WidgetType, ByteOrder, ScalingMode, ColorRule } from '../../shared/types'
 
 interface Props {
   connection: ConnectionConfig
@@ -14,8 +15,10 @@ const FC_OPTIONS: { value: ReadFC; label: string }[] = [
   { value: 2, label: 'FC02 — Read Discrete Inputs (read-only)' },
   { value: 3, label: 'FC03 — Read Holding Registers' },
   { value: 4, label: 'FC04 — Read Input Registers (read-only)' },
+  { value: 23, label: 'FC23 — Read/Write Multiple Registers' },
 ]
-const DATA_TYPES: DataType[] = ['uint16', 'int16', 'uint32', 'int32', 'float32', 'binary', 'hex', 'ascii']
+const DATA_TYPES_CLEAN: DataType[] = ['uint16', 'int16', 'uint32', 'int32', 'float32', 'float64', 'uint64', 'int64', 'binary', 'hex', 'ascii']
+const BYTE_ORDERS: ByteOrder[] = ['ABCD', 'CDAB', 'BADC', 'DCBA']
 const WIDGET_TYPES: WidgetType[] = ['table', 'sparkline', 'gauge']
 
 function parseStartAddr(raw: string, fc: ReadFC): number {
@@ -94,6 +97,8 @@ export default function RegisterGroupEditor({ connection, onClose }: Props): Rea
 
   const startAddr = parseStartAddr(startAddrRaw, fc)
   const endAddr = startAddr + count - 1
+  const typeWidth = dataTypeRegCount(regDataType)
+  const numLogical = Math.max(1, Math.floor(count / typeWidth))
   const totalBytes = count * 2
   const refStart = modbusRef(fc, startAddr)
   const refEnd = modbusRef(fc, endAddr)
@@ -108,10 +113,13 @@ export default function RegisterGroupEditor({ connection, onClose }: Props): Rea
 
   const addGroup = () => {
     const groupLabel = label.trim() || `Group @ ${refStart}`
-    const regs: RegisterConfig[] = Array.from({ length: count }, (_, i) => ({
-      address: startAddr + i,
-      label: `${label.trim() || 'Reg'} ${modbusRef(fc, startAddr + i)}`,
+    const typeWidth = dataTypeRegCount(regDataType)
+    const numLogical = Math.max(1, Math.floor(count / typeWidth))
+    const regs: RegisterConfig[] = Array.from({ length: numLogical }, (_, i) => ({
+      address: startAddr + i * typeWidth,
+      label: `${label.trim() || 'Reg'} ${modbusRef(fc, startAddr + i * typeWidth)}`,
       dataType: regDataType,
+      byteOrder: 'ABCD' as ByteOrder,
       scale: regScale,
       offset: regOffset,
       unit: regUnit,
@@ -120,7 +128,12 @@ export default function RegisterGroupEditor({ connection, onClose }: Props): Rea
       gaugeMin: 0,
       gaugeMax: 65535,
       sparklineWindowSecs: 60,
-      alert: { enabled: false, lowLimit: null, highLimit: null, notifyOS: false }
+      alert: { enabled: false, lowLimit: null, highLimit: null, notifyOS: false },
+      valueNameMap: {},
+      bitNames: [],
+      colorRules: [],
+      scalingMode: 'linear' as ScalingMode,
+      x1: 0, y1: 0, x2: 1, y2: 1,
     }))
 
     const group: RegisterGroup = {
@@ -245,20 +258,110 @@ export default function RegisterGroupEditor({ connection, onClose }: Props): Rea
                               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
                                 <RegField label="Data Type">
                                   <select value={reg.dataType} onChange={e => updateRegEdit(i, { dataType: e.target.value as DataType })} style={inp}>
-                                    {DATA_TYPES.map(dt => <option key={dt} value={dt}>{dt}</option>)}
+                                    {DATA_TYPES_CLEAN.map(dt => <option key={dt} value={dt}>{dt}</option>)}
                                   </select>
                                 </RegField>
-                                <RegField label="Scale">
-                                  <input type="number" value={reg.scale} onChange={e => updateRegEdit(i, { scale: parseFloat(e.target.value) || 1 })} style={inp} step="any" />
-                                </RegField>
-                                <RegField label="Offset">
-                                  <input type="number" value={reg.offset} onChange={e => updateRegEdit(i, { offset: parseFloat(e.target.value) || 0 })} style={inp} step="any" />
+                                <RegField label="Byte Order">
+                                  <select value={reg.byteOrder ?? 'ABCD'} onChange={e => updateRegEdit(i, { byteOrder: e.target.value as ByteOrder })} style={inp}
+                                    disabled={reg.dataType === 'uint16' || reg.dataType === 'int16' || reg.dataType === 'binary' || reg.dataType === 'hex' || reg.dataType === 'ascii'}>
+                                    {BYTE_ORDERS.map(o => <option key={o} value={o}>{o}</option>)}
+                                  </select>
                                 </RegField>
                                 <RegField label="Widget">
                                   <select value={reg.widgetType} onChange={e => updateRegEdit(i, { widgetType: e.target.value as WidgetType })} style={inp}>
                                     {WIDGET_TYPES.map(w => <option key={w} value={w}>{w}</option>)}
                                   </select>
                                 </RegField>
+                                <RegField label="Unit">
+                                  <input value={reg.unit} onChange={e => updateRegEdit(i, { unit: e.target.value })} style={inp} placeholder="°C" />
+                                </RegField>
+                              </div>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
+                                <RegField label="Scaling">
+                                  <select value={reg.scalingMode ?? 'linear'} onChange={e => updateRegEdit(i, { scalingMode: e.target.value as ScalingMode })} style={inp}>
+                                    <option value="linear">Linear (scale+offset)</option>
+                                    <option value="twoPoint">Two-point calibration</option>
+                                  </select>
+                                </RegField>
+                                {(reg.scalingMode ?? 'linear') === 'linear' ? (
+                                  <>
+                                    <RegField label="Scale ×">
+                                      <input type="number" value={reg.scale} onChange={e => updateRegEdit(i, { scale: parseFloat(e.target.value) || 1 })} style={inp} step="any" />
+                                    </RegField>
+                                    <RegField label="Offset +">
+                                      <input type="number" value={reg.offset} onChange={e => updateRegEdit(i, { offset: parseFloat(e.target.value) || 0 })} style={inp} step="any" />
+                                    </RegField>
+                                  </>
+                                ) : (
+                                  <>
+                                    <RegField label="(X1,Y1)">
+                                      <div style={{ display: 'flex', gap: 4 }}>
+                                        <input type="number" value={reg.x1 ?? 0} onChange={e => updateRegEdit(i, { x1: parseFloat(e.target.value) || 0 })} style={{ ...inp, flex: 1 }} placeholder="X1" step="any" />
+                                        <input type="number" value={reg.y1 ?? 0} onChange={e => updateRegEdit(i, { y1: parseFloat(e.target.value) || 0 })} style={{ ...inp, flex: 1 }} placeholder="Y1" step="any" />
+                                      </div>
+                                    </RegField>
+                                    <RegField label="(X2,Y2)">
+                                      <div style={{ display: 'flex', gap: 4 }}>
+                                        <input type="number" value={reg.x2 ?? 1} onChange={e => updateRegEdit(i, { x2: parseFloat(e.target.value) || 1 })} style={{ ...inp, flex: 1 }} placeholder="X2" step="any" />
+                                        <input type="number" value={reg.y2 ?? 1} onChange={e => updateRegEdit(i, { y2: parseFloat(e.target.value) || 1 })} style={{ ...inp, flex: 1 }} placeholder="Y2" step="any" />
+                                      </div>
+                                    </RegField>
+                                  </>
+                                )}
+                              </div>
+                              {/* Alert config */}
+                              <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr auto', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.3, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                  <input type="checkbox" checked={reg.alert?.enabled ?? false} onChange={e => updateRegEdit(i, { alert: { ...reg.alert, enabled: e.target.checked } })} />
+                                  Alert
+                                </label>
+                                <RegField label="Low Limit">
+                                  <input type="number" value={reg.alert?.lowLimit ?? ''} onChange={e => updateRegEdit(i, { alert: { ...reg.alert, lowLimit: e.target.value === '' ? null : parseFloat(e.target.value) } })} style={inp} placeholder="—" step="any" disabled={!reg.alert?.enabled} />
+                                </RegField>
+                                <RegField label="High Limit">
+                                  <input type="number" value={reg.alert?.highLimit ?? ''} onChange={e => updateRegEdit(i, { alert: { ...reg.alert, highLimit: e.target.value === '' ? null : parseFloat(e.target.value) } })} style={inp} placeholder="—" step="any" disabled={!reg.alert?.enabled} />
+                                </RegField>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--text-muted)', cursor: 'pointer', whiteSpace: 'nowrap', marginTop: 14 }}>
+                                  <input type="checkbox" checked={reg.alert?.notifyOS ?? false} onChange={e => updateRegEdit(i, { alert: { ...reg.alert, notifyOS: e.target.checked } })} disabled={!reg.alert?.enabled} />
+                                  OS Notify
+                                </label>
+                              </div>
+                              {/* Color rules */}
+                              <div style={{ marginBottom: 8 }}>
+                                <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <span>Color Rules</span>
+                                  <button onClick={() => updateRegEdit(i, { colorRules: [...(reg.colorRules ?? []), { op: '<', value: 0, fg: '#ef4444' }] })}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', fontSize: 11, padding: 0 }}>+ Add Rule</button>
+                                </div>
+                                {(reg.colorRules ?? []).map((rule, ri) => (
+                                  <div key={ri} style={{ display: 'flex', gap: 4, marginBottom: 4, alignItems: 'center' }}>
+                                    <select value={rule.op} onChange={e => { const cr = [...(reg.colorRules ?? [])]; cr[ri] = { ...cr[ri], op: e.target.value as ColorRule['op'] }; updateRegEdit(i, { colorRules: cr }) }} style={{ ...inp, width: 50 }}>
+                                      {['<','<=','>','>=','==','!='].map(o => <option key={o} value={o}>{o}</option>)}
+                                    </select>
+                                    <input type="number" value={rule.value} onChange={e => { const cr = [...(reg.colorRules ?? [])]; cr[ri] = { ...cr[ri], value: parseFloat(e.target.value) || 0 }; updateRegEdit(i, { colorRules: cr }) }} style={{ ...inp, width: 60 }} step="any" />
+                                    <input type="color" value={rule.fg ?? '#ef4444'} title="Text color" onChange={e => { const cr = [...(reg.colorRules ?? [])]; cr[ri] = { ...cr[ri], fg: e.target.value }; updateRegEdit(i, { colorRules: cr }) }} style={{ width: 28, height: 24, border: 'none', borderRadius: 3, cursor: 'pointer', padding: 0 }} />
+                                    <input type="color" value={rule.bg ?? '#00000000'} title="Background" onChange={e => { const cr = [...(reg.colorRules ?? [])]; cr[ri] = { ...cr[ri], bg: e.target.value }; updateRegEdit(i, { colorRules: cr }) }} style={{ width: 28, height: 24, border: 'none', borderRadius: 3, cursor: 'pointer', padding: 0 }} />
+                                    <button onClick={() => updateRegEdit(i, { colorRules: (reg.colorRules ?? []).filter((_, j) => j !== ri) })}
+                                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: 13, padding: '0 2px' }}>✕</button>
+                                  </div>
+                                ))}
+                              </div>
+                              {/* Value name map */}
+                              <div style={{ marginBottom: 8 }}>
+                                <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 4, display: 'flex', justifyContent: 'space-between' }}>
+                                  <span>Value Names (integer → label)</span>
+                                  <button onClick={() => { const m = { ...(reg.valueNameMap ?? {}) }; m[String(Object.keys(m).length)] = ''; updateRegEdit(i, { valueNameMap: m }) }}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', fontSize: 11, padding: 0 }}>+ Add</button>
+                                </div>
+                                {Object.entries(reg.valueNameMap ?? {}).map(([k, v]) => (
+                                  <div key={k} style={{ display: 'flex', gap: 4, marginBottom: 4, alignItems: 'center' }}>
+                                    <input type="number" defaultValue={k} onBlur={e => {
+                                      const m = { ...(reg.valueNameMap ?? {}) }; const old = k; const nk = e.target.value; if (nk !== old) { delete m[old]; m[nk] = v } updateRegEdit(i, { valueNameMap: m })
+                                    }} style={{ ...inp, width: 55 }} placeholder="0" />
+                                    <input value={v} onChange={e => { const m = { ...(reg.valueNameMap ?? {}), [k]: e.target.value }; updateRegEdit(i, { valueNameMap: m }) }} style={{ ...inp, flex: 1 }} placeholder="Label…" />
+                                    <button onClick={() => { const m = { ...(reg.valueNameMap ?? {}) }; delete m[k]; updateRegEdit(i, { valueNameMap: m }) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: 13, padding: '0 2px' }}>✕</button>
+                                  </div>
+                                ))}
                               </div>
                               {/* Sample for this register */}
                               <div style={{ fontSize: 10, color: 'var(--text-muted)', padding: '5px 8px', background: 'var(--surface-2)', borderRadius: 4, fontFamily: 'ui-monospace, monospace' }}>
@@ -301,7 +404,9 @@ export default function RegisterGroupEditor({ connection, onClose }: Props): Rea
               </Field>
               <Field label="Registers to read (max 125)">
                 <input type="number" value={count} onChange={e => { setCount(Math.max(1, Math.min(125, +e.target.value))); setAdded(null) }} min={1} max={125} style={inputStyle} />
-                <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>= {totalBytes} bytes read from bus</span>
+                <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                  {totalBytes} bytes · <strong style={{ color: 'var(--primary)' }}>{numLogical} display row{numLogical !== 1 ? 's' : ''}</strong>{typeWidth > 1 ? ` (${typeWidth * 2}B per ${regDataType})` : ''}
+                </span>
               </Field>
             </div>
 
@@ -319,7 +424,7 @@ export default function RegisterGroupEditor({ connection, onClose }: Props): Rea
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
                 <RegField label="Data Type">
                   <select value={regDataType} onChange={e => setRegDataType(e.target.value as DataType)} style={inp}>
-                    {DATA_TYPES.map(dt => <option key={dt} value={dt}>{dt}</option>)}
+                    {DATA_TYPES_CLEAN.map(dt => <option key={dt} value={dt}>{dt}</option>)}
                   </select>
                 </RegField>
                 <RegField label="Scale">
@@ -370,14 +475,14 @@ export default function RegisterGroupEditor({ connection, onClose }: Props): Rea
                 <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
                   Sample Display (raw = 1234)
                 </div>
-                {Array.from({ length: Math.min(count, 3) }, (_, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0', borderBottom: i < Math.min(count, 3) - 1 ? '1px solid var(--border)' : undefined }}>
+                {Array.from({ length: Math.min(numLogical, 3) }, (_, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0', borderBottom: i < Math.min(numLogical, 3) - 1 ? '1px solid var(--border)' : undefined }}>
                     <span style={{ fontSize: 10, color: 'var(--primary)', minWidth: 54, fontFamily: 'ui-monospace, monospace' }}>
-                      {modbusRef(fc, startAddr + i)}
+                      {modbusRef(fc, startAddr + i * typeWidth)}
                     </span>
-                    <span style={{ fontSize: 9, color: 'var(--text-muted)', minWidth: 16 }}>2B</span>
+                    <span style={{ fontSize: 9, color: 'var(--text-muted)', minWidth: 22 }}>{typeWidth * 2}B</span>
                     <span style={{ fontSize: 12, flex: 1, color: 'var(--text)', fontWeight: 500 }}>
-                      {label || 'Reg'} {modbusRef(fc, startAddr + i)}
+                      {label || 'Reg'} {modbusRef(fc, startAddr + i * typeWidth)}
                     </span>
                     <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
                       {sampleDecode(regDataType, regScale, regOffset, regUnit)}
@@ -385,8 +490,8 @@ export default function RegisterGroupEditor({ connection, onClose }: Props): Rea
                     <span style={{ fontSize: 10, color: 'var(--text-muted)', background: 'var(--surface-2)', padding: '1px 5px', borderRadius: 3 }}>{regWidget}</span>
                   </div>
                 ))}
-                {count > 3 && (
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', paddingTop: 4 }}>+ {count - 3} more register{count - 3 !== 1 ? 's' : ''}…</div>
+                {numLogical > 3 && (
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', paddingTop: 4 }}>+ {numLogical - 3} more…</div>
                 )}
               </div>
             </div>

@@ -12,7 +12,7 @@ import type { ConnectionConfig } from '../../shared/types'
 
 interface Props { connection: ConnectionConfig }
 
-type Tab = 'registers' | 'write' | 'frames'
+type Tab = 'registers' | 'write'
 
 const LOG_OPEN_HEIGHT = 200
 
@@ -73,7 +73,7 @@ export default function ConnectionPanel({ connection }: Props): React.JSX.Elemen
   }
 
   const applyInterval = (ms: number) => {
-    const clamped = Math.max(100, Math.round(ms))
+    const clamped = Math.max(2000, Math.round(ms))
     setIntervalDraft(clamped)
     setEditingInterval(false)
     updateConnection(connection.id, { pollIntervalMs: clamped })
@@ -83,7 +83,6 @@ export default function ConnectionPanel({ connection }: Props): React.JSX.Elemen
   const TABS: { id: Tab; label: string }[] = [
     { id: 'registers', label: 'Registers' },
     { id: 'write', label: 'Write' },
-    { id: 'frames', label: 'Frames' },
   ]
 
   const drawerHeight = logOpen ? LOG_OPEN_HEIGHT + 28 : 28
@@ -119,7 +118,11 @@ export default function ConnectionPanel({ connection }: Props): React.JSX.Elemen
 
         <button
           onClick={e => { e.stopPropagation(); handlePauseResume() }}
-          style={{ ...hBtn, opacity: status === 'connected' ? 0.85 : 0.35, fontSize: 13 }}
+          style={{
+            ...hBtn, fontSize: 13,
+            opacity: status === 'connected' ? 0.9 : 0.4,
+            color: pollingPaused ? 'var(--warning)' : undefined,
+          }}
           title={pollingPaused ? 'Resume polling' : 'Pause polling'}
           disabled={status !== 'connected'}
         >
@@ -165,7 +168,7 @@ export default function ConnectionPanel({ connection }: Props): React.JSX.Elemen
           >
             <div style={{ fontWeight: 700, fontSize: 14 }}>Poll Interval</div>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {[500, 1000, 2000, 5000, 10000, 30000].map(ms => (
+              {[2000, 5000, 10000, 30000, 60000].map(ms => (
                 <button key={ms} onClick={() => applyInterval(ms)} style={{ ...presetBtn, background: intervalDraft === ms ? 'var(--primary)' : 'var(--surface-2)', color: intervalDraft === ms ? '#fff' : 'var(--text)' }}>
                   {fmtInterval(ms)}
                 </button>
@@ -176,16 +179,16 @@ export default function ConnectionPanel({ connection }: Props): React.JSX.Elemen
                 ref={intervalInputRef}
                 type="number"
                 value={intervalDraft}
-                min={100}
-                step={100}
-                onChange={e => setIntervalDraft(Math.max(100, +e.target.value))}
+                min={2000}
+                step={1000}
+                onChange={e => setIntervalDraft(Math.max(2000, +e.target.value))}
                 onKeyDown={e => { if (e.key === 'Enter') applyInterval(intervalDraft) }}
                 style={{ flex: 1, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 10px', color: 'var(--text)', fontSize: 13 }}
               />
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>ms</span>
               <button onClick={() => applyInterval(intervalDraft)} style={{ background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontSize: 13 }}>Apply</button>
             </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Min 100 ms · Connection will restart</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Min 2 s · Connection will restart</div>
           </div>
         </div>,
         document.body
@@ -246,7 +249,6 @@ export default function ConnectionPanel({ connection }: Props): React.JSX.Elemen
         )}
 
         {tab === 'write' && <WritePanel connection={connection} />}
-        {tab === 'frames' && <RawFrameInspector connectionId={connection.id} connection={connection} />}
       </div>
 
       {/* Connection comm log drawer — collapsible at bottom, same pattern as APP LOG */}

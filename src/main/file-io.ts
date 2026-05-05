@@ -1,7 +1,7 @@
 import { app, dialog } from 'electron'
 import { join } from 'path'
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, readdirSync } from 'fs'
-import type { Workspace } from '../shared/types'
+import type { Workspace, LoggingOptions } from '../shared/types'
 
 const SCHEMA_VERSION = 1
 
@@ -54,29 +54,77 @@ export async function importWorkspace(): Promise<Workspace | null> {
   } catch { return null }
 }
 
-const logStreams = new Map<string, string>()
+interface LogState {
+  filePath: string
+  options: LoggingOptions
+  lastDate: string
+  prevValues: Map<string, string>
+}
 
-export async function startLogging(connectionId: string, connectionName: string): Promise<void> {
+const logStreams = new Map<string, LogState>()
+
+export async function startLogging(connectionId: string, connectionName: string, options?: Partial<LoggingOptions>): Promise<void> {
+  const opts: LoggingOptions = {
+    onChangeOnly: false, errorsOnly: false, appendMode: false,
+    midnightRotate: false, trafficLogPath: null,
+    ...options
+  }
+  const today = new Date().toISOString().split('T')[0]
   const { filePath } = await dialog.showSaveDialog({
-    defaultPath: `${connectionName}-${new Date().toISOString().split('T')[0]}.csv`,
+    defaultPath: `${connectionName}-${today}.csv`,
     filters: [{ name: 'CSV', extensions: ['csv'] }]
   })
   if (!filePath) return
-  writeFileSync(filePath, 'timestamp,connection,fc,address,raw_hex,raw_dec,decoded_value,unit,status\n')
-  logStreams.set(connectionId, filePath)
+  const header = 'timestamp,connection,fc,address,raw_hex,raw_dec,decoded_value,unit,status\n'
+  if (opts.appendMode && existsSync(filePath)) {
+    appendFileSync(filePath, header)
+  } else {
+    writeFileSync(filePath, header)
+  }
+  logStreams.set(connectionId, { filePath, options: opts, lastDate: today, prevValues: new Map() })
 }
 
 export function stopLogging(connectionId: string): void {
   logStreams.delete(connectionId)
 }
 
-export function appendLog(connectionId: string, row: string): void {
-  const path = logStreams.get(connectionId)
-  if (path) appendFileSync(path, row + '\n')
+export function appendLog(connectionId: string, row: string, status?: string, valueKey?: string, decodedStr?: string): void {
+  const state = logStreams.get(connectionId)
+  if (!state) return
+
+  if (state.options.errorsOnly && status !== 'alert' && status !== 'error') return
+
+  if (state.options.onChangeOnly && valueKey !== undefined && decodedStr !== undefined) {
+    const prev = state.prevValues.get(valueKey)
+    if (prev === decodedStr) return
+    state.prevValues.set(valueKey, decodedStr)
+  }
+
+  if (state.options.midnightRotate) {
+    const today = new Date().toISOString().split('T')[0]
+    if (today !== state.lastDate) {
+      state.lastDate = today
+      const newPath = state.filePath.replace(/(-\d{4}-\d{2}-\d{2})?(\.\w+)$/, `-${today}$2`)
+      writeFileSync(newPath, 'timestamp,connection,fc,address,raw_hex,raw_dec,decoded_value,unit,status\n')
+      state.filePath = newPath
+    }
+  }
+
+  appendFileSync(state.filePath, row + '\n')
+}
+
+export function appendTrafficLog(connectionId: string, frame: string): void {
+  const state = logStreams.get(connectionId)
+  if (!state?.options.trafficLogPath) return
+  appendFileSync(state.options.trafficLogPath, frame + '\n')
 }
 
 export function isLogging(connectionId: string): boolean {
   return logStreams.has(connectionId)
+}
+
+export function getLoggingOptions(connectionId: string): LoggingOptions | null {
+  return logStreams.get(connectionId)?.options ?? null
 }
 
 function migrate(ws: Workspace): Workspace {

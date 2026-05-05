@@ -1,3 +1,4 @@
+/* ── Light ── */
 :root {
   --bg: #f8fafc;
   --surface: #ffffff;
@@ -13,8 +14,11 @@
   --danger: #ef4444;
   --radius: 6px;
   --shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --font-ui: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
+/* ── Dark ── */
 [data-theme="dark"] {
   --bg: #0f172a;
   --surface: #1e293b;
@@ -29,4 +33,120 @@
   --warning: #fbbf24;
   --danger: #f87171;
   --shadow: 0 1px 3px rgba(0,0,0,0.4);
+  --font-ui: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* ── Hacker (Matrix green on black) ── */
+[data-theme="hacker"] {
+  --bg: #000000;
+  --surface: #0a0f0a;
+  --surface-2: #050a05;
+  --border: #1a3a1a;
+  --text: #00ff41;
+  --text-muted: #007a1e;
+  --primary: #00ff41;
+  --primary-light: #001a00;
+  --primary-text: #39ff14;
+  --success: #00e676;
+  --warning: #ffff00;
+  --danger: #ff1744;
+  --shadow: 0 0 12px rgba(0,255,65,0.15);
+  --font-mono: 'Courier New', 'Lucida Console', monospace;
+  --font-ui: 'Courier New', 'Lucida Console', monospace;
+  --radius: 2px;
+}
+
+/* ── Warp (Warp terminal — purple dusk) ── */
+[data-theme="warp"] {
+  --bg: #120d1e;
+  --surface: #1c1430;
+  --surface-2: #150f26;
+  --border: #2d2145;
+  --text: #e8e0f8;
+  --text-muted: #7c6fa8;
+  --primary: #a78bfa;
+  --primary-light: #1e154a;
+  --primary-text: #c4b5fd;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --shadow: 0 0 16px rgba(167,139,250,0.12);
+  --font-ui: 'SF Pro Display', system-ui, -apple-system, sans-serif;
+  --radius: 10px;
+}
+
+/* ── Nord ── */
+[data-theme="nord"] {
+  --bg: #2e3440;
+  --surface: #3b4252;
+  --surface-2: #292e3a;
+  --border: #4c566a;
+  --text: #eceff4;
+  --text-muted: #7b88a1;
+  --primary: #88c0d0;
+  --primary-light: #2a3a45;
+  --primary-text: #81a1c1;
+  --success: #a3be8c;
+  --warning: #ebcb8b;
+  --danger: #bf616a;
+  --shadow: 0 1px 4px rgba(0,0,0,0.4);
+  --font-ui: system-ui, -apple-system, sans-serif;
+  --radius: 5px;
+}
+
+/* ── Monokai ── */
+[data-theme="monokai"] {
+  --bg: #1e1f1c;
+  --surface: #272822;
+  --surface-2: #1a1b18;
+  --border: #3e3d32;
+  --text: #f8f8f2;
+  --text-muted: #75715e;
+  --primary: #a6e22e;
+  --primary-light: #1e2a0e;
+  --primary-text: #e6db74;
+  --success: #a6e22e;
+  --warning: #e6db74;
+  --danger: #f92672;
+  --shadow: 0 1px 4px rgba(0,0,0,0.5);
+  --font-ui: 'Consolas', 'Courier New', monospace;
+  --radius: 3px;
+}
+
+/* ── Solarized Dark ── */
+[data-theme="solarized"] {
+  --bg: #002b36;
+  --surface: #073642;
+  --surface-2: #002028;
+  --border: #0d4555;
+  --text: #839496;
+  --text-muted: #586e75;
+  --primary: #268bd2;
+  --primary-light: #0a2a38;
+  --primary-text: #2aa198;
+  --success: #859900;
+  --warning: #b58900;
+  --danger: #dc322f;
+  --shadow: 0 1px 4px rgba(0,0,0,0.5);
+  --font-ui: system-ui, -apple-system, sans-serif;
+  --radius: 4px;
+}
+
+/* ── Cyberpunk (neon pink/purple) ── */
+[data-theme="cyberpunk"] {
+  --bg: #060010;
+  --surface: #0d0020;
+  --surface-2: #080016;
+  --border: #2a0050;
+  --text: #f0e0ff;
+  --text-muted: #9060c0;
+  --primary: #ff00aa;
+  --primary-light: #1a0033;
+  --primary-text: #ff66cc;
+  --success: #00ff9f;
+  --warning: #ffcc00;
+  --danger: #ff2244;
+  --shadow: 0 0 16px rgba(255,0,170,0.2);
+  --font-ui: 'Courier New', monospace;
+  --radius: 0px;
 }

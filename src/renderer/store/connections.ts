@@ -22,6 +22,7 @@ interface ConnectionsStore {
   connections: Record<string, ConnectionLiveState>
   logEntries: LogEntry[]
   rawFrames: Record<string, RawFrame[]>
+  poppedOutIds: Set<string>
   setStatus: (id: string, status: ConnectionStatus, error?: string) => void
   setRegisterValues: (id: string, values: RegisterValue[], addresses: number[]) => void
   appendSparkline: (id: string, address: number, point: SparklinePoint, maxPoints: number) => void
@@ -32,12 +33,15 @@ interface ConnectionsStore {
   appendLog: (entry: LogEntry) => void
   appendFrame: (connectionId: string, frame: RawFrame) => void
   removeConnection: (id: string) => void
+  popOut: (id: string) => void
+  popIn: (id: string) => void
 }
 
 export const useConnectionsStore = create<ConnectionsStore>((set) => ({
   connections: {},
   logEntries: [],
   rawFrames: {},
+  poppedOutIds: new Set<string>(),
 
   setStatus: (id, status, error) =>
     set((state) => ({
@@ -107,5 +111,19 @@ export const useConnectionsStore = create<ConnectionsStore>((set) => ({
     set((state) => {
       const { [id]: _, ...rest } = state.connections
       return { connections: rest }
+    }),
+
+  popOut: (id) =>
+    set((state) => {
+      const next = new Set(state.poppedOutIds)
+      next.add(id)
+      return { poppedOutIds: next }
+    }),
+
+  popIn: (id) =>
+    set((state) => {
+      const next = new Set(state.poppedOutIds)
+      next.delete(id)
+      return { poppedOutIds: next }
     }),
 }))

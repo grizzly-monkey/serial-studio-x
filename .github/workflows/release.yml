@@ -47,10 +47,10 @@ jobs:
             platform: mac
 
           # macOS Intel — x86_64 (macos-13 is the last Intel GitHub runner)
-          - name: macOS Intel
-            os: macos-13
-            build_cmd: --mac --x64
-            platform: mac
+#          - name: macOS Intel
+#            os: macos-13
+#            build_cmd: --mac --x64
+#            platform: mac
 
           # Windows x64
           - name: Windows x64

@@ -143,15 +143,23 @@ async function connect(): Promise<void> {
     if (config.protocol === 'tcp') {
       await client.connectTCP(config.host!, { port: config.port ?? 502 })
       client.setID(config.unitId ?? 1)
+    } else if (config.protocol === 'udp') {
+      await client.connectUDP(config.host!, { port: config.port ?? 502 })
+      client.setID(config.unitId ?? 1)
+    } else if (config.protocol === 'rtu-tcp') {
+      await client.connectTcpRTUBuffered(config.host!, { port: config.port ?? 502 })
+      client.setID(config.unitId ?? 1)
     } else if (config.protocol === 'rtu') {
       // connectRTUBuffered uses an inter-byte-timeout parser which correctly
       // re-assembles multi-byte RTU responses on macOS USB-serial adapters.
-      await client.connectRTUBuffered(config.serialPort!, {
+      const serialOpts: Record<string, unknown> = {
         baudRate: config.baudRate ?? 9600,
         dataBits: config.dataBits ?? 8,
         stopBits: config.stopBits ?? 1,
         parity: config.parity ?? 'none',
-      })
+      }
+      if (config.rs485Mode) serialOpts['rs485'] = { enabled: true, rtsOnSend: true, rtsAfterSend: false }
+      await client.connectRTUBuffered(config.serialPort!, serialOpts)
       client.setID(config.slaveId ?? 1)
     } else {
       await client.connectAsciiSerial(config.serialPort!, {
@@ -163,11 +171,14 @@ async function connect(): Promise<void> {
       client.setID(config.slaveId ?? 1)
     }
 
-    client.setTimeout(readTimeout)
+    const effectiveTimeout = config.responseTimeoutMs
+      ? Math.max(200, Math.min(config.responseTimeoutMs, 30000))
+      : readTimeout
+    client.setTimeout(effectiveTimeout)
 
     // For serial protocols: flush adapter buffer and allow line to settle before
     // first poll. Prevents stale bytes from a previous session causing timeouts.
-    if (config.protocol !== 'tcp') {
+    if (config.protocol !== 'tcp' && config.protocol !== 'udp' && config.protocol !== 'rtu-tcp') {
       try {
         await new Promise<void>((res, rej) => {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -258,18 +269,31 @@ function startPolling(): void {
           })
 
         } catch (readErr) {
-          consecutiveErrors++
           const msg = errStr(readErr)
-          console.error(`[worker:${config!.id}]  READ ERR (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}) FC${fc}@${addr}: ${msg}`)
+          const isModbusException = readErr !== null && typeof readErr === 'object' &&
+            typeof (readErr as Record<string, unknown>).modbusCode === 'number'
+
+          console.error(`[worker:${config!.id}]  READ ERR FC${fc}@${addr}: ${msg}`)
           postTxLog(fc, addr, count, timestamp, `❌ ${msg}`, group.id, true)
 
-          if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS || isPortError(readErr)) {
-            fatalError = msg  // signal reconnect AFTER mutex is released
+          if (isModbusException) {
+            // Device is alive — it replied with a Modbus exception for this group.
+            // Do not increment consecutiveErrors or trigger a reconnect; just log it.
           } else {
-            postStatus('error', `[${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}] ${msg}`)
+            consecutiveErrors++
+            if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS || isPortError(readErr)) {
+              fatalError = msg  // signal reconnect AFTER mutex is released
+            } else {
+              postStatus('error', `[${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}] ${msg}`)
+            }
           }
         } finally {
           release()  // always release exactly once — no explicit release in catch
+        }
+
+        // Inter-message delay (optional, helps with slow devices)
+        if (running && config!.interMessageDelayMs && config!.interMessageDelayMs > 0) {
+          await new Promise(r => setTimeout(r, config!.interMessageDelayMs))
         }
 
         // Reconnect logic runs outside the mutex scope so the port lock is freed first
@@ -336,6 +360,63 @@ process.parentPort.on('message', async (event) => {
           payload: { connectionId: config!.id, groupId: null, fc, startAddress: address, count, timestamp: Date.now(), txHex: `❌ ${errMsg}`, isError: true, writeValue: '' }
         })
       } catch { /* ignore */ }
+    } finally {
+      release()
+    }
+  }
+
+  if (msg.type === 'raw-frame') {
+    const bytes: number[] = msg.payload.bytes
+    const timestamp = Date.now()
+    const hexStr = bytes.map((b: number) => b.toString(16).toUpperCase().padStart(2, '0')).join(' ')
+    try {
+      process.parentPort.postMessage({
+        type: 'tx-log',
+        payload: { connectionId: config!.id, groupId: null, fc: bytes[1] ?? 0, startAddress: 0, count: 0, timestamp, txHex: hexStr, isError: false, writeValue: 'RAW' }
+      })
+    } catch { /* ignore */ }
+
+    const release = await portMutex.acquire()
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const port = (client as any)._port ?? (client as any)._client
+      if (port?.write) {
+        await new Promise<void>((res, rej) =>
+          port.write(Buffer.from(bytes), (err: Error | null) => err ? rej(err) : res()))
+
+        // Capture response bytes with 1 s timeout (mutex held — poll loop queued)
+        const rxBytes = await new Promise<number[]>(resolve => {
+          const collected: number[] = []
+          let settleTimer: ReturnType<typeof setTimeout> | null = null
+          const deadline = setTimeout(() => {
+            if (settleTimer) clearTimeout(settleTimer)
+            port.removeListener('data', onData)
+            resolve(collected)
+          }, 1000)
+          const onData = (chunk: Buffer) => {
+            collected.push(...Array.from(chunk as Buffer))
+            // Reset settle timer — wait 40 ms after last chunk before resolving
+            if (settleTimer) clearTimeout(settleTimer)
+            settleTimer = setTimeout(() => {
+              clearTimeout(deadline)
+              port.removeListener('data', onData)
+              resolve(collected)
+            }, 40)
+          }
+          port.on('data', onData)
+        })
+
+        if (rxBytes.length > 0) {
+          process.parentPort.postMessage({
+            type: 'echo-response',
+            payload: { connectionId: config!.id, bytes: rxBytes, timestamp: Date.now() }
+          })
+        }
+      }
+      process.parentPort.postMessage({ type: 'write-ok', payload: { address: 0 } })
+    } catch (err) {
+      const errMsg = errStr(err)
+      process.parentPort.postMessage({ type: 'write-error', payload: { address: 0, error: errMsg } })
     } finally {
       release()
     }

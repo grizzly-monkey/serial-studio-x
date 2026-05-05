@@ -1,6 +1,8 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
+import PanelWindow from './PanelWindow'
+import ErrorBoundary from './components/ErrorBoundary'
 import './styles/global.css'
 import './styles/theme.css'
 import { useConnectionsStore } from './store/connections'
@@ -48,8 +50,22 @@ console.log = (...args) => { _log(...args); pushSysLog('log', args) }
 console.warn = (...args) => { _warn(...args); pushSysLog('warn', args) }
 console.error = (...args) => { _error(...args); pushSysLog('error', args) }
 
+// Catch unhandled promise rejections so they appear in the sys log instead of going silent
+window.addEventListener('unhandledrejection', (e) => {
+  const msg = e.reason instanceof Error ? e.reason.message : String(e.reason)
+  console.error('[unhandled rejection]', msg)
+})
+
+window.addEventListener('error', (e) => {
+  console.error('[uncaught error]', e.message)
+})
+
+const panelId = new URLSearchParams(window.location.search).get('panel')
+
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
-    <App />
+    <ErrorBoundary>
+      {panelId ? <PanelWindow connectionId={panelId} /> : <App />}
+    </ErrorBoundary>
   </React.StrictMode>
 )

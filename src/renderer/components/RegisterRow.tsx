@@ -4,7 +4,7 @@ import { useWorkspaceStore } from '../store/workspace'
 import TableCell from './widgets/TableCell'
 import Sparkline from './widgets/Sparkline'
 import Gauge from './widgets/Gauge'
-import type { ConnectionConfig, RegisterGroup, RegisterConfig, WidgetType, DataType } from '../../shared/types'
+import type { ConnectionConfig, RegisterGroup, RegisterConfig, WidgetType, DataType, ColorRule } from '../../shared/types'
 
 interface Props {
   connection: ConnectionConfig
@@ -21,7 +21,26 @@ export function modbusRef(fc: number, addr: number): string {
 }
 
 function dataTypeBytes(dt: DataType): number {
-  return ['float32', 'uint32', 'int32'].includes(dt) ? 4 : 2
+  if (['float64', 'int64', 'uint64'].includes(dt)) return 8
+  if (['float32', 'uint32', 'int32'].includes(dt)) return 4
+  return 2
+}
+
+function evalColorRules(rules: ColorRule[], value: number | string): { fg?: string; bg?: string } | null {
+  if (typeof value !== 'number' || !rules?.length) return null
+  for (const rule of rules) {
+    let match = false
+    switch (rule.op) {
+      case '<':  match = value < rule.value; break
+      case '<=': match = value <= rule.value; break
+      case '>':  match = value > rule.value; break
+      case '>=': match = value >= rule.value; break
+      case '==': match = value === rule.value; break
+      case '!=': match = value !== rule.value; break
+    }
+    if (match) return { fg: rule.fg, bg: rule.bg }
+  }
+  return null
 }
 
 export default function RegisterRow({ connection, group, register }: Props): React.JSX.Element {
@@ -31,6 +50,7 @@ export default function RegisterRow({ connection, group, register }: Props): Rea
   const { updateConnection } = useWorkspaceStore()
 
   const alertState = liveValue?.alertState ?? 'ok'
+  const colorMatch = liveValue ? evalColorRules(register.colorRules ?? [], liveValue.decoded) : null
   const displayBase = register.displayBase === 'inherit' ? preferredBase : register.displayBase
 
   const rawDisplay = liveValue
@@ -60,8 +80,9 @@ export default function RegisterRow({ connection, group, register }: Props): Rea
   return (
     <div style={{
       marginBottom: 3, padding: '5px 6px', borderRadius: 5,
-      background: alertState !== 'ok' ? 'rgba(245,158,11,0.07)' : undefined,
-      border: `1px solid ${alertState !== 'ok' ? 'rgba(245,158,11,0.35)' : 'transparent'}`
+      background: colorMatch?.bg ?? (alertState !== 'ok' ? 'rgba(245,158,11,0.07)' : undefined),
+      border: `1px solid ${alertState !== 'ok' ? 'rgba(245,158,11,0.35)' : 'transparent'}`,
+      color: colorMatch?.fg ?? undefined,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
         <span

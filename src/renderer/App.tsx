@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import TopBar from './components/TopBar'
+import MenuBar from './components/MenuBar'
 import Sidebar from './components/Sidebar'
 import Dashboard from './components/Dashboard'
 import LogDrawer from './components/LogDrawer'
@@ -10,7 +11,7 @@ import type { LogEntry } from '../shared/types'
 export default function App(): React.JSX.Element {
   const theme = useWorkspaceStore(s => s.workspace.settings.theme)
   const connections = useWorkspaceStore(s => s.workspace.connections)
-  const { setStatus, setRegisterValues, appendSparkline, appendLog } = useConnectionsStore()
+  const { setStatus, setRegisterValues, appendSparkline, appendLog, popOut, popIn } = useConnectionsStore()
   const shownErrors = useRef<Set<string>>(new Set())
   const [errorToast, setErrorToast] = useState<{ connectionName: string; message: string } | null>(null)
 
@@ -86,16 +87,22 @@ export default function App(): React.JSX.Element {
       appendLog(entry as LogEntry)
     })
 
+    const offPopOut = window.api.onPopOut((id) => popOut(id))
+    const offPopIn = window.api.onPopIn((id) => popIn(id))
+
     return () => {
       offStatus()
       offPoll()
       offLogEntry()
+      offPopOut()
+      offPopIn()
     }
   }, [connections])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
       <TopBar />
+      <MenuBar />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <Sidebar />
         <Dashboard />
