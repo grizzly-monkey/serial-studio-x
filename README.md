@@ -1,17 +1,17 @@
 <div align="center">
 
-# ⚡ Modbus Storm
+# ⚡ Serial Studio X
 
 **A production-ready, open-source Modbus TCP/RTU/ASCII desktop client**
 
-[![GitHub release](https://img.shields.io/github/v/release/grw-io/modbus-storm?style=for-the-badge&color=6366f1)](https://github.com/grw-io/modbus-storm/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/grw-io/modbus-storm/total?style=for-the-badge&color=22c55e)](https://github.com/grw-io/modbus-storm/releases)
+[![GitHub release](https://img.shields.io/github/v/release/grizzly-monkey/serial-studio-x?style=for-the-badge&color=6366f1)](https://github.com/grizzly-monkey/serial-studio-x/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/grizzly-monkey/serial-studio-x/total?style=for-the-badge&color=22c55e)](https://github.com/grizzly-monkey/serial-studio-x/releases)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)](https://www.gnu.org/licenses/gpl-3.0)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey?style=for-the-badge)](https://github.com/grw-io/modbus-storm/releases/latest)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey?style=for-the-badge)](https://github.com/grizzly-monkey/serial-studio-x/releases/latest)
 
 <br/>
 
-<img src="resources/Screenshot 2026-05-05 at 2.00.13 AM.png" alt="Modbus Storm Dashboard" width="800"/>
+<img src="resources/Screenshot 2026-05-05 at 2.00.13 AM.png" alt="Serial Studio X Dashboard" width="800"/>
 
 <br/>
 
@@ -21,9 +21,9 @@
 
 ---
 
-## 🎯 What is Modbus Storm?
+## 🎯 What is Serial Studio X?
 
-Modbus Storm is a cross-platform **Electron desktop application** for engineers, technicians, and developers working with industrial Modbus devices. Connect to PLCs, sensors, drives, and any Modbus-compliant hardware over TCP/IP, RTU serial, or ASCII — all from one beautifully designed dashboard.
+Serial Studio X is a cross-platform **Electron desktop application** for engineers, technicians, and developers working with industrial Modbus devices. Connect to PLCs, sensors, drives, and any Modbus-compliant hardware over TCP/IP, RTU serial, or ASCII — all from one beautifully designed dashboard.
 
 No cloud. No subscription. No telemetry. Just a fast, offline-capable tool that works.
 
@@ -67,45 +67,21 @@ No cloud. No subscription. No telemetry. Just a fast, offline-capable tool that 
 
 ## 📦 Installation
 
+Download the latest release for your platform from the [Releases page](https://github.com/grizzly-monkey/serial-studio-x/releases/latest).
+
 ### 🍎 macOS
 
-| Chip | Download |
-|------|----------|
-| **Apple Silicon** (M1 / M2 / M3 / M4) | [📥 Download DMG (arm64)](https://github.com/grw-io/modbus-storm/releases/latest) |
-| **Intel** (x86_64) | [📥 Download DMG (x64)](https://github.com/grw-io/modbus-storm/releases/latest) |
+| Chip | File |
+|------|------|
+| **Apple Silicon** (M1 / M2 / M3 / M4) | `Serial-Studio-X-*-arm64.dmg` |
+| **Intel** (x86_64) | `Serial-Studio-X-*-x64.dmg` |
 
-> **Note:** macOS may show a security warning on first launch since the app is not notarized.  
-> Right-click → **Open** → **Open** to bypass Gatekeeper, or run:
+> **Gatekeeper warning:** Since the app is not notarized, right-click → **Open** → **Open** on first launch, or run:
 > ```bash
-> xattr -d com.apple.quarantine /Applications/Modbus\ Storm.app
+> xattr -d com.apple.quarantine /Applications/Serial\ Studio\ X.app
 > ```
 
-### 🪟 Windows
-
-| Format | Download |
-|--------|----------|
-| **Installer** (recommended) | [📥 Download NSIS Installer](https://github.com/grw-io/modbus-storm/releases/latest) |
-| **Portable** (no install) | [📥 Download Portable .exe](https://github.com/grw-io/modbus-storm/releases/latest) |
-
-### 🐧 Linux
-
-| Format | Architecture | Download |
-|--------|-------------|----------|
-| **AppImage** (universal) | x86_64 | [📥 Download AppImage](https://github.com/grw-io/modbus-storm/releases/latest) |
-| **Debian/Ubuntu** `.deb` | x86_64 | [📥 Download .deb](https://github.com/grw-io/modbus-storm/releases/latest) |
-| **Fedora/RHEL** `.rpm` | x86_64 | [📥 Download .rpm](https://github.com/grw-io/modbus-storm/releases/latest) |
-
-```bash
-# AppImage — make executable and run
-chmod +x modbus-storm-*.AppImage
-./modbus-storm-*.AppImage
-
-# Debian/Ubuntu
-sudo dpkg -i modbus-storm-*.deb
-
-# Fedora/RHEL
-sudo rpm -i modbus-storm-*.rpm
-```
+All other platforms (Windows, Linux) are also built and published automatically — grab the appropriate binary from the [Releases page](https://github.com/grizzly-monkey/serial-studio-x/releases/latest).
 
 ---
 
@@ -158,7 +134,7 @@ sudo rpm -i modbus-storm-*.rpm
 
 ## 🏗️ Architecture
 
-Modbus Storm uses a strict **three-layer Electron process model** for reliability and security:
+Serial Studio X uses a strict **three-layer Electron process model** for reliability and security:
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -193,7 +169,7 @@ Modbus Storm uses a strict **three-layer Electron process model** for reliabilit
 
 ### Prerequisites
 
-- **Node.js** 20+
+- **Node.js** 22+
 - **npm** 10+
 - **Python** 3.x (for native module compilation)
 - **Xcode Command Line Tools** (macOS) or **Visual Studio Build Tools** (Windows)
@@ -201,10 +177,9 @@ Modbus Storm uses a strict **three-layer Electron process model** for reliabilit
 ### Setup
 
 ```bash
-git clone https://github.com/grw-io/modbus-storm.git
-cd modbus-storm
+git clone https://github.com/grizzly-monkey/serial-studio-x.git
+cd serial-studio-x
 npm install
-npx electron-rebuild   # rebuild native modules (serialport) for Electron
 ```
 
 ### Commands
@@ -262,7 +237,7 @@ Contributions are welcome! Here's how to get started:
 
 ### Reporting Bugs
 
-Please open a [GitHub Issue](https://github.com/grw-io/modbus-storm/issues) with:
+Please open a [GitHub Issue](https://github.com/grizzly-monkey/serial-studio-x/issues) with:
 - Your OS and version
 - Steps to reproduce
 - Expected vs actual behavior
@@ -270,7 +245,7 @@ Please open a [GitHub Issue](https://github.com/grw-io/modbus-storm/issues) with
 
 ### Feature Requests
 
-Open a [GitHub Discussion](https://github.com/grw-io/modbus-storm/discussions) — let's talk about it before implementing.
+Open a [GitHub Discussion](https://github.com/grizzly-monkey/serial-studio-x/discussions) — let's talk about it before implementing.
 
 ---
 
@@ -282,13 +257,13 @@ This application:
 - Has **no auto-update** that could deliver unsigned payloads
 - Is fully **auditable** — the entire source is in this repository
 
-Found a security issue? Please open a private [Security Advisory](https://github.com/grw-io/modbus-storm/security/advisories/new) rather than a public issue.
+Found a security issue? Please open a private [Security Advisory](https://github.com/grizzly-monkey/serial-studio-x/security/advisories/new) rather than a public issue.
 
 ---
 
 ## 📄 License
 
-**Modbus Storm** is free software distributed under the [GNU General Public License v3.0](LICENSE).
+**Serial Studio X** is free software distributed under the [GNU General Public License v3.0](LICENSE).
 
 You are free to use, study, share, and improve it. If you distribute modified versions, you must also make the source available under the same license.
 
@@ -298,6 +273,6 @@ You are free to use, study, share, and improve it. If you distribute modified ve
 
 Built with ❤️ using [Electron](https://www.electronjs.org/), [React](https://react.dev/), [modbus-serial](https://github.com/yaacov/node-modbus-serial), and [recharts](https://recharts.org/)
 
-⭐ **Star this repo** if Modbus Storm saves you time!
+⭐ **Star this repo** if Serial Studio X saves you time!
 
 </div>
