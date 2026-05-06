@@ -26,11 +26,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "Serial Studio X $TAG" \
-            --draft \
-            --generate-notes
+          # Skip creation if the release already exists (idempotent on re-runs)
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" &>/dev/null; then
+            echo "Release $TAG already exists — skipping creation"
+          else
+            gh release create "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Serial Studio X $TAG" \
+              --draft \
+              --generate-notes
+          fi
 
   # ── Step 2: Build and upload binaries on each platform.
   build:
@@ -116,4 +121,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
-        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+        run: |
+          IS_DRAFT=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft' 2>/dev/null || echo "false")
+          if [ "$IS_DRAFT" = "true" ]; then
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+          else
+            echo "Release $TAG is already published or does not exist — nothing to do"
+          fi
