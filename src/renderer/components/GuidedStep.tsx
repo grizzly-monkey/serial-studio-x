@@ -19,6 +19,7 @@ export interface GuidedStepProps {
   onCalibrate: (inputValue?: number) => Promise<void>
   onComplete: (readingValue: number) => void
   onSkip?: () => void
+  onRetry?: () => void
   hasInput?: boolean
   inputLabel?: string
   inputStep?: number
@@ -53,11 +54,61 @@ function OptBadge() {
   )
 }
 
+function LiveReadingBox({
+  isValidReading, liveValue, liveUnit, tempValue, onRetry, style,
+}: {
+  isValidReading: boolean
+  liveValue: number | undefined
+  liveUnit: string
+  tempValue?: number | undefined
+  onRetry?: () => void
+  style?: React.CSSProperties
+}) {
+  return (
+    <div style={{
+      background: 'var(--surface)', border: `1px solid ${isValidReading ? SUCCESS : DANGER}33`,
+      borderRadius: 5, padding: '7px 10px',
+      display: 'flex', alignItems: 'center', gap: 10,
+      ...style,
+    }}>
+      <div style={{ width: 6, height: 6, borderRadius: '50%', background: isValidReading ? SUCCESS : DANGER, flexShrink: 0 }} />
+      {isValidReading ? (
+        <>
+          <span style={{ color: SUCCESS, fontWeight: 700, fontSize: 13 }}>
+            {(liveValue as number).toFixed(2)} {liveUnit}
+          </span>
+          {tempValue !== undefined && (
+            <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+              · Temp: {tempValue.toFixed(1)} °C
+            </span>
+          )}
+          <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-muted)' }}>polling every 5s</span>
+        </>
+      ) : (
+        <>
+          <span style={{ color: DANGER, fontSize: 11 }}>No reading — check connection</span>
+          {onRetry && (
+            <button
+              onClick={onRetry}
+              style={{
+                marginLeft: 'auto', background: 'none',
+                border: `1px solid ${DANGER}44`, color: DANGER,
+                borderRadius: 4, padding: '2px 8px', fontSize: 10,
+                cursor: 'pointer', fontWeight: 600,
+              }}
+            >↺ Retry</button>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function GuidedStep({
   stepNumber, title, instruction, timerSeconds,
   isOptional, isLocked, isDone, doneLabel, isSkipped,
   liveValue, liveUnit, tempValue, isConnected,
-  onCalibrate, onComplete, onSkip,
+  onCalibrate, onComplete, onSkip, onRetry,
   hasInput, inputLabel, inputStep = 1, inputInitial,
 }: GuidedStepProps): React.JSX.Element {
   const [phase, setPhase] = useState<Phase>('idle')
@@ -171,7 +222,7 @@ export default function GuidedStep({
 
   // ── Active — derived display values ─────────────────────────────────
   const elapsed = timerSeconds - remaining
-  const pollCycle = 5 - (elapsed % 5)   // 5→4→3→2→1→5→... per polling interval
+  const pollCycle = 5 - (elapsed % 5)
   const progress = Math.max(0, 1 - remaining / timerSeconds)
   const totalStr = timerSeconds >= 60
     ? `${Math.floor(timerSeconds / 60)}:${(timerSeconds % 60).toString().padStart(2, '0')}`
@@ -234,6 +285,7 @@ export default function GuidedStep({
             liveValue={liveValue}
             liveUnit={liveUnit}
             tempValue={tempValue}
+            onRetry={onRetry}
           />
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
             <button
@@ -285,6 +337,7 @@ export default function GuidedStep({
             liveValue={liveValue}
             liveUnit={liveUnit}
             tempValue={tempValue}
+            onRetry={onRetry}
           />
         </>
       )}
@@ -297,6 +350,7 @@ export default function GuidedStep({
             liveValue={liveValue}
             liveUnit={liveUnit}
             tempValue={tempValue}
+            onRetry={onRetry}
             style={{ marginBottom: 10 }}
           />
           {hasInput && (
@@ -343,7 +397,17 @@ export default function GuidedStep({
               Check cable, slave ID, and that the sensor is polling before retrying.
             </div>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            {onRetry && (
+              <button
+                onClick={onRetry}
+                style={{
+                  background: 'none', border: `1px solid ${DANGER}44`, color: DANGER,
+                  borderRadius: 6, padding: '7px 16px', fontWeight: 600,
+                  fontSize: 12, cursor: 'pointer',
+                }}
+              >↺ Reconnect</button>
+            )}
             <button
               onClick={handleStart}
               style={{
@@ -355,42 +419,6 @@ export default function GuidedStep({
           </div>
         </>
       )}
-    </div>
-  )
-}
-
-function LiveReadingBox({
-  isValidReading, liveValue, liveUnit, tempValue, style,
-}: {
-  isValidReading: boolean
-  liveValue: number | undefined
-  liveUnit: string
-  tempValue?: number | undefined
-  style?: React.CSSProperties
-}) {
-  return (
-    <div style={{
-      background: 'var(--surface)', border: `1px solid ${SUCCESS}33`,
-      borderRadius: 5, padding: '7px 10px',
-      display: 'flex', alignItems: 'center', gap: 10,
-      ...style,
-    }}>
-      <div style={{ width: 6, height: 6, borderRadius: '50%', background: isValidReading ? SUCCESS : DANGER, flexShrink: 0 }} />
-      {isValidReading ? (
-        <>
-          <span style={{ color: SUCCESS, fontWeight: 700, fontSize: 13 }}>
-            {(liveValue as number).toFixed(2)} {liveUnit}
-          </span>
-          {tempValue !== undefined && (
-            <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
-              · Temp: {tempValue.toFixed(1)} °C
-            </span>
-          )}
-        </>
-      ) : (
-        <span style={{ color: DANGER, fontSize: 11 }}>No reading — check connection</span>
-      )}
-      <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-muted)' }}>polling every 5s</span>
     </div>
   )
 }

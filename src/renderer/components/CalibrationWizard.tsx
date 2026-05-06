@@ -1,5 +1,6 @@
-import React, { useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useConnectionsStore } from '../store/connections'
+import { useWorkspaceStore, GROWLOC_CONNECTIONS } from '../store/workspace'
 import GuidedStep from './GuidedStep'
 
 // Modbus protocol addresses (0-indexed: ref − 40001)
@@ -217,62 +218,134 @@ function StepperBar({ steps, currentIndex, outcomes }: {
   )
 }
 
+// ── Step factories ───────────────────────────────────────────────────
+
+function makePHSteps(connId: string): StepConfig[] {
+  return [
+    {
+      stepperTitle: 'Zero Cal',
+      title: 'Zero Calibration — pH 6.86',
+      instruction: 'Prepare a pH 6.86 buffer solution and submerge the sensor so at least 1/3 is in solution. Wait for the live reading to stabilise before calibrating.',
+      timerSeconds: 300, isOptional: false,
+      onCalibrate: async () => { await applyWrite(connId, PH_ADDR.zeroCal, 0) },
+    },
+    {
+      stepperTitle: 'Acid',
+      title: 'Acid Slope — pH 4.00',
+      instruction: 'Rinse sensor with distilled water and blot dry. Submerge in pH 4.00 buffer solution. Wait for the reading to stabilise.',
+      timerSeconds: 300, isOptional: false,
+      onCalibrate: async () => { await applyWrite(connId, PH_ADDR.slopeAcid, 0) },
+    },
+    {
+      stepperTitle: 'Alkali',
+      title: 'Alkali Slope — pH 9.18',
+      instruction: 'Rinse sensor with distilled water and blot dry. Submerge in pH 9.18 buffer solution. Wait for the reading to stabilise. Skip to omit — acid slope alone is sufficient for most use cases.',
+      timerSeconds: 300, isOptional: true,
+      onCalibrate: async () => { await applyWrite(connId, PH_ADDR.slopeAlk, 0) },
+    },
+    {
+      stepperTitle: 'Temp',
+      title: 'Temperature Calibration',
+      instruction: 'Compare the live temperature reading against a reference thermometer. After the 30-second wait, enter the actual temperature below and calibrate.',
+      timerSeconds: 30, isOptional: true,
+      hasInput: true, inputLabel: 'Actual temp (°C)', inputStep: 0.1, inputInitial: '25.0',
+      useTempReading: true,
+      onCalibrate: async (t) => { await applyWrite(connId, PH_ADDR.tempCal, Math.round((t ?? 0) * 10)) },
+    },
+  ]
+}
+
+function makeECSteps(connId: string): StepConfig[] {
+  return [
+    {
+      stepperTitle: 'Zero Cal',
+      title: 'Zero Calibration — In Air',
+      instruction: 'Rinse the sensor with distilled water and blot dry. Hold the sensor in open air and wait for the reading to stabilise.',
+      timerSeconds: 180, isOptional: false,
+      onCalibrate: async () => { await applyWrite(connId, EC_ADDR.zeroCal, 0) },
+    },
+    {
+      stepperTitle: 'Slope',
+      title: 'Slope Calibration — Standard Solution',
+      instruction: 'Place the electrode vertically in a known standard solution (10%–100% of full scale). Keep at least 2 cm from the bottom and walls. Wait for the reading to stabilise, then enter the exact conductivity of your standard solution below.',
+      timerSeconds: 300, isOptional: false,
+      hasInput: true, inputLabel: 'Standard solution (μS/cm)', inputStep: 1, inputInitial: '1413',
+      onCalibrate: async (c) => { await applyWrite(connId, EC_ADDR.slopeCal, Math.round(c ?? 0)) },
+    },
+    {
+      stepperTitle: 'Temp',
+      title: 'Temperature Calibration',
+      instruction: 'Compare the live temperature reading against a reference thermometer. After the 30-second wait, enter the actual temperature below and calibrate.',
+      timerSeconds: 30, isOptional: true,
+      hasInput: true, inputLabel: 'Actual temp (°C)', inputStep: 0.1, inputInitial: '25.0',
+      useTempReading: true,
+      onCalibrate: async (t) => { await applyWrite(connId, EC_ADDR.tempCal, Math.round((t ?? 0) * 10)) },
+    },
+  ]
+}
+
+// ── ConnSelector ─────────────────────────────────────────────────────
+
+function ConnSelector({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+  const connections = useWorkspaceStore(s => s.workspace.connections)
+  if (connections.length <= 1) return null
+  return (
+    <select
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      onClick={e => e.stopPropagation()}
+      style={{
+        background: 'var(--surface-2)', border: '1px solid var(--border)',
+        color: 'var(--text)', borderRadius: 4,
+        padding: '2px 6px', fontSize: 10, cursor: 'pointer',
+      }}
+    >
+      {connections.map(c => (
+        <option key={c.id} value={c.id}>{c.name}</option>
+      ))}
+    </select>
+  )
+}
+
 // ── PhCalibration ────────────────────────────────────────────────────
 
-const PH_STEPS: StepConfig[] = [
-  {
-    stepperTitle: 'Zero Cal',
-    title: 'Zero Calibration — pH 6.86',
-    instruction: 'Prepare a pH 6.86 buffer solution and submerge the sensor so at least 1/3 is in solution. Wait for the live reading to stabilise before calibrating.',
-    timerSeconds: 300,
-    isOptional: false,
-    onCalibrate: async () => { await applyWrite(PH_ID, PH_ADDR.zeroCal, 0) },
-  },
-  {
-    stepperTitle: 'Acid',
-    title: 'Acid Slope — pH 4.00',
-    instruction: 'Rinse sensor with distilled water and blot dry. Submerge in pH 4.00 buffer solution. Wait for the reading to stabilise.',
-    timerSeconds: 300,
-    isOptional: false,
-    onCalibrate: async () => { await applyWrite(PH_ID, PH_ADDR.slopeAcid, 0) },
-  },
-  {
-    stepperTitle: 'Alkali',
-    title: 'Alkali Slope — pH 9.18',
-    instruction: 'Rinse sensor with distilled water and blot dry. Submerge in pH 9.18 buffer solution. Wait for the reading to stabilise. Skip to omit — acid slope alone is sufficient for most use cases.',
-    timerSeconds: 300,
-    isOptional: true,
-    onCalibrate: async () => { await applyWrite(PH_ID, PH_ADDR.slopeAlk, 0) },
-  },
-  {
-    stepperTitle: 'Temp',
-    title: 'Temperature Calibration',
-    instruction: 'Compare the live temperature reading against a reference thermometer. After the 30-second wait, enter the actual temperature below and calibrate.',
-    timerSeconds: 30,
-    isOptional: true,
-    hasInput: true,
-    inputLabel: 'Actual temp (°C)',
-    inputStep: 0.1,
-    inputInitial: '25.0',
-    useTempReading: true,
-    onCalibrate: async (t) => { await applyWrite(PH_ID, PH_ADDR.tempCal, Math.round((t ?? 0) * 10)) },
-  },
-]
-
 function PhCalibration() {
-  const connStatus = useConnectionsStore(s => s.connections[PH_ID]?.status ?? 'idle')
-  const rawPh = useConnectionsStore(s => s.connections[PH_ID]?.registerValues[0]?.decoded)
-  const rawTemp = useConnectionsStore(s => s.connections[PH_ID]?.registerValues[2]?.decoded)
+  const connections = useWorkspaceStore(s => s.workspace.connections)
+  const defaultId = connections.find(c => c.id === PH_ID)?.id ?? connections[0]?.id ?? PH_ID
+  const [connId, setConnId] = useState(defaultId)
+
+  const connStatus = useConnectionsStore(s => s.connections[connId]?.status ?? 'idle')
+  const rawPh = useConnectionsStore(s => s.connections[connId]?.registerValues[0]?.decoded)
+  const rawTemp = useConnectionsStore(s => s.connections[connId]?.registerValues[2]?.decoded)
   const isConnected = connStatus === 'connected'
   const phValue = typeof rawPh === 'number' ? rawPh : undefined
   const tempValue = typeof rawTemp === 'number' ? rawTemp : undefined
 
+  const steps = useMemo(() => makePHSteps(connId), [connId])
   const [currentStep, setCurrentStep] = useState(0)
-  const [outcomes, setOutcomes] = useState<Outcome[]>(Array(PH_STEPS.length).fill('pending'))
-  const [doneLabels, setDoneLabels] = useState<Array<string | undefined>>(Array(PH_STEPS.length).fill(undefined))
+  const [outcomes, setOutcomes] = useState<Outcome[]>(Array(steps.length).fill('pending'))
+  const [doneLabels, setDoneLabels] = useState<Array<string | undefined>>(Array(steps.length).fill(undefined))
+
+  // Reset wizard when connection changes
+  useEffect(() => {
+    setCurrentStep(0)
+    setOutcomes(Array(steps.length).fill('pending'))
+    setDoneLabels(Array(steps.length).fill(undefined))
+  }, [connId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleConnChange(id: string) {
+    setConnId(id)
+  }
+
+  function handleRetry() {
+    const config = connections.find(c => c.id === connId)
+    if (!config) return
+    window.api.disconnectConnection(connId).catch(() => {})
+      .finally(() => window.api.connectConnection(config).catch(() => {}))
+  }
 
   function handleComplete(i: number, reading: number) {
-    const isTempStep = PH_STEPS[i].useTempReading
+    const isTempStep = steps[i].useTempReading
     const label = `Calibrated at ${reading.toFixed(isTempStep ? 1 : 2)} ${isTempStep ? '°C' : 'pH'}`
     setDoneLabels(prev => { const n = [...prev]; n[i] = label; return n })
     setOutcomes(prev => { const n = [...prev]; n[i] = 'done'; return n })
@@ -284,13 +357,14 @@ function PhCalibration() {
     setCurrentStep(i + 1)
   }
 
-  const allDone = currentStep >= PH_STEPS.length
+  const allDone = currentStep >= steps.length
+  const selectedConn = connections.find(c => c.id === connId)
 
   return (
     <div>
       <StepperBar
-        steps={PH_STEPS.map(s => ({ title: s.stepperTitle, optional: s.isOptional }))}
-        currentIndex={Math.min(currentStep, PH_STEPS.length - 1)}
+        steps={steps.map(s => ({ title: s.stepperTitle, optional: s.isOptional }))}
+        currentIndex={Math.min(currentStep, steps.length - 1)}
         outcomes={outcomes}
       />
 
@@ -299,13 +373,16 @@ function PhCalibration() {
         display: 'flex', alignItems: 'center', gap: 8,
         padding: '7px 24px', borderBottom: '1px solid var(--border)', flexShrink: 0,
       }}>
-        <div style={{ width: 7, height: 7, borderRadius: '50%', background: isConnected ? '#22c55e' : '#ef4444' }} />
-        <span style={{ fontSize: 10, fontWeight: 700, color: isConnected ? '#22c55e' : '#ef4444' }}>
-          PHG-206A {isConnected ? 'Connected' : connStatus.toUpperCase()}
+        <div style={{ width: 7, height: 7, borderRadius: '50%', background: isConnected ? '#22c55e' : DANGER, flexShrink: 0 }} />
+        <span style={{ fontSize: 10, fontWeight: 700, color: isConnected ? '#22c55e' : DANGER }}>
+          {selectedConn?.name ?? connId} {isConnected ? 'Connected' : connStatus.toUpperCase()}
         </span>
-        <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 'auto' }}>
-          Slave ID 2 · polling every 5s
-        </span>
+        <ConnSelector value={connId} onChange={handleConnChange} />
+        {selectedConn && (
+          <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 'auto' }}>
+            ID {selectedConn.slaveId} · {selectedConn.pollIntervalMs / 1000}s poll
+          </span>
+        )}
       </div>
 
       <div style={{ padding: '12px 24px', display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -315,17 +392,13 @@ function PhCalibration() {
             borderRadius: 8, padding: '16px 20px', background: '#22c55e11', textAlign: 'center',
           }}>
             <div style={{ fontSize: 20, marginBottom: 6 }}>✓</div>
-            <div style={{ fontWeight: 700, fontSize: 14, color: '#22c55e', marginBottom: 4 }}>
-              pH Calibration Complete
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-              All calibration values have been saved to the sensor.
-            </div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: '#22c55e', marginBottom: 4 }}>pH Calibration Complete</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>All calibration values have been saved to the sensor.</div>
           </div>
         ) : (
-          PH_STEPS.map((step, i) => (
+          steps.map((step, i) => (
             <GuidedStep
-              key={i}
+              key={`${i}-${connId}`}
               stepNumber={i + 1}
               title={step.title}
               instruction={step.instruction}
@@ -342,6 +415,7 @@ function PhCalibration() {
               onCalibrate={step.onCalibrate}
               onComplete={reading => handleComplete(i, reading)}
               onSkip={step.isOptional ? () => handleSkip(i) : undefined}
+              onRetry={handleRetry}
               hasInput={step.hasInput}
               inputLabel={step.inputLabel}
               inputStep={step.inputStep}
@@ -351,63 +425,45 @@ function PhCalibration() {
         )}
       </div>
 
-      <FactoryResetSection connectionId={PH_ID} address={PH_ADDR.reset} isConnected={isConnected} />
+      <FactoryResetSection connectionId={connId} address={PH_ADDR.reset} isConnected={isConnected} />
     </div>
   )
 }
 
 // ── EcCalibration ────────────────────────────────────────────────────
 
-const EC_STEPS: StepConfig[] = [
-  {
-    stepperTitle: 'Zero Cal',
-    title: 'Zero Calibration — In Air',
-    instruction: 'Rinse the sensor with distilled water and blot dry. Hold the sensor in open air and wait for the reading to stabilise.',
-    timerSeconds: 180,
-    isOptional: false,
-    onCalibrate: async () => { await applyWrite(EC_ID, EC_ADDR.zeroCal, 0) },
-  },
-  {
-    stepperTitle: 'Slope',
-    title: 'Slope Calibration — Standard Solution',
-    instruction: 'Place the electrode vertically in a known standard solution (10%–100% of full scale). Keep at least 2 cm from the bottom and walls. Wait for the reading to stabilise, then enter the exact conductivity of your standard solution below.',
-    timerSeconds: 300,
-    isOptional: false,
-    hasInput: true,
-    inputLabel: 'Standard solution (μS/cm)',
-    inputStep: 1,
-    inputInitial: '1413',
-    onCalibrate: async (conductivity) => { await applyWrite(EC_ID, EC_ADDR.slopeCal, Math.round(conductivity ?? 0)) },
-  },
-  {
-    stepperTitle: 'Temp',
-    title: 'Temperature Calibration',
-    instruction: 'Compare the live temperature reading against a reference thermometer. After the 30-second wait, enter the actual temperature below and calibrate.',
-    timerSeconds: 30,
-    isOptional: true,
-    hasInput: true,
-    inputLabel: 'Actual temp (°C)',
-    inputStep: 0.1,
-    inputInitial: '25.0',
-    useTempReading: true,
-    onCalibrate: async (t) => { await applyWrite(EC_ID, EC_ADDR.tempCal, Math.round((t ?? 0) * 10)) },
-  },
-]
-
 function EcCalibration() {
-  const connStatus = useConnectionsStore(s => s.connections[EC_ID]?.status ?? 'idle')
-  const rawEc = useConnectionsStore(s => s.connections[EC_ID]?.registerValues[0]?.decoded)
-  const rawTemp = useConnectionsStore(s => s.connections[EC_ID]?.registerValues[2]?.decoded)
+  const connections = useWorkspaceStore(s => s.workspace.connections)
+  const defaultId = connections.find(c => c.id === EC_ID)?.id ?? connections[0]?.id ?? EC_ID
+  const [connId, setConnId] = useState(defaultId)
+
+  const connStatus = useConnectionsStore(s => s.connections[connId]?.status ?? 'idle')
+  const rawEc = useConnectionsStore(s => s.connections[connId]?.registerValues[0]?.decoded)
+  const rawTemp = useConnectionsStore(s => s.connections[connId]?.registerValues[2]?.decoded)
   const isConnected = connStatus === 'connected'
   const ecValue = typeof rawEc === 'number' ? rawEc : undefined
   const tempValue = typeof rawTemp === 'number' ? rawTemp : undefined
 
+  const steps = useMemo(() => makeECSteps(connId), [connId])
   const [currentStep, setCurrentStep] = useState(0)
-  const [outcomes, setOutcomes] = useState<Outcome[]>(Array(EC_STEPS.length).fill('pending'))
-  const [doneLabels, setDoneLabels] = useState<Array<string | undefined>>(Array(EC_STEPS.length).fill(undefined))
+  const [outcomes, setOutcomes] = useState<Outcome[]>(Array(steps.length).fill('pending'))
+  const [doneLabels, setDoneLabels] = useState<Array<string | undefined>>(Array(steps.length).fill(undefined))
+
+  useEffect(() => {
+    setCurrentStep(0)
+    setOutcomes(Array(steps.length).fill('pending'))
+    setDoneLabels(Array(steps.length).fill(undefined))
+  }, [connId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleRetry() {
+    const config = connections.find(c => c.id === connId)
+    if (!config) return
+    window.api.disconnectConnection(connId).catch(() => {})
+      .finally(() => window.api.connectConnection(config).catch(() => {}))
+  }
 
   function handleComplete(i: number, reading: number) {
-    const isTempStep = EC_STEPS[i].useTempReading
+    const isTempStep = steps[i].useTempReading
     const label = `Calibrated at ${reading.toFixed(isTempStep ? 1 : 0)} ${isTempStep ? '°C' : 'μS/cm'}`
     setDoneLabels(prev => { const n = [...prev]; n[i] = label; return n })
     setOutcomes(prev => { const n = [...prev]; n[i] = 'done'; return n })
@@ -419,13 +475,14 @@ function EcCalibration() {
     setCurrentStep(i + 1)
   }
 
-  const allDone = currentStep >= EC_STEPS.length
+  const allDone = currentStep >= steps.length
+  const selectedConn = connections.find(c => c.id === connId)
 
   return (
     <div>
       <StepperBar
-        steps={EC_STEPS.map(s => ({ title: s.stepperTitle, optional: s.isOptional }))}
-        currentIndex={Math.min(currentStep, EC_STEPS.length - 1)}
+        steps={steps.map(s => ({ title: s.stepperTitle, optional: s.isOptional }))}
+        currentIndex={Math.min(currentStep, steps.length - 1)}
         outcomes={outcomes}
       />
 
@@ -434,13 +491,16 @@ function EcCalibration() {
         display: 'flex', alignItems: 'center', gap: 8,
         padding: '7px 24px', borderBottom: '1px solid var(--border)', flexShrink: 0,
       }}>
-        <div style={{ width: 7, height: 7, borderRadius: '50%', background: isConnected ? '#22c55e' : '#ef4444' }} />
-        <span style={{ fontSize: 10, fontWeight: 700, color: isConnected ? '#22c55e' : '#ef4444' }}>
-          DDM-206A {isConnected ? 'Connected' : connStatus.toUpperCase()}
+        <div style={{ width: 7, height: 7, borderRadius: '50%', background: isConnected ? '#22c55e' : DANGER, flexShrink: 0 }} />
+        <span style={{ fontSize: 10, fontWeight: 700, color: isConnected ? '#22c55e' : DANGER }}>
+          {selectedConn?.name ?? connId} {isConnected ? 'Connected' : connStatus.toUpperCase()}
         </span>
-        <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 'auto' }}>
-          Slave ID 1 · polling every 5s
-        </span>
+        <ConnSelector value={connId} onChange={id => setConnId(id)} />
+        {selectedConn && (
+          <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 'auto' }}>
+            ID {selectedConn.slaveId} · {selectedConn.pollIntervalMs / 1000}s poll
+          </span>
+        )}
       </div>
 
       <div style={{ padding: '12px 24px', display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -450,17 +510,13 @@ function EcCalibration() {
             borderRadius: 8, padding: '16px 20px', background: '#22c55e11', textAlign: 'center',
           }}>
             <div style={{ fontSize: 20, marginBottom: 6 }}>✓</div>
-            <div style={{ fontWeight: 700, fontSize: 14, color: '#22c55e', marginBottom: 4 }}>
-              EC Calibration Complete
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-              All calibration values have been saved to the sensor.
-            </div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: '#22c55e', marginBottom: 4 }}>EC Calibration Complete</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>All calibration values have been saved to the sensor.</div>
           </div>
         ) : (
-          EC_STEPS.map((step, i) => (
+          steps.map((step, i) => (
             <GuidedStep
-              key={i}
+              key={`${i}-${connId}`}
               stepNumber={i + 1}
               title={step.title}
               instruction={step.instruction}
@@ -477,6 +533,7 @@ function EcCalibration() {
               onCalibrate={step.onCalibrate}
               onComplete={reading => handleComplete(i, reading)}
               onSkip={step.isOptional ? () => handleSkip(i) : undefined}
+              onRetry={handleRetry}
               hasInput={step.hasInput}
               inputLabel={step.inputLabel}
               inputStep={step.inputStep}
@@ -486,7 +543,7 @@ function EcCalibration() {
         )}
       </div>
 
-      <FactoryResetSection connectionId={EC_ID} address={EC_ADDR.reset} isConnected={isConnected} />
+      <FactoryResetSection connectionId={connId} address={EC_ADDR.reset} isConnected={isConnected} />
     </div>
   )
 }
@@ -500,6 +557,18 @@ interface Props {
 
 export default function CalibrationWizard({ onBack, onClose }: Props): React.JSX.Element {
   const [tab, setTab] = useState<'ph' | 'ec'>('ph')
+  const { workspace, addConnection } = useWorkspaceStore()
+
+  // Auto-add Growloc default connections if not already in workspace, then connect them
+  useEffect(() => {
+    const existingIds = new Set(workspace.connections.map(c => c.id))
+    for (const conn of GROWLOC_CONNECTIONS) {
+      if (!existingIds.has(conn.id)) {
+        addConnection(conn)
+        window.api.connectConnection(conn).catch(() => {})
+      }
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const tabBtn = (active: boolean): React.CSSProperties => ({
     padding: '7px 20px', fontWeight: 700, fontSize: 13, cursor: 'pointer',
