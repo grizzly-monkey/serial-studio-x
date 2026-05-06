@@ -557,16 +557,13 @@ interface Props {
 
 export default function CalibrationWizard({ onBack, onClose }: Props): React.JSX.Element {
   const [tab, setTab] = useState<'ph' | 'ec'>('ph')
-  const { workspace, addConnection } = useWorkspaceStore()
-
-  // Auto-add Growloc default connections if not already in workspace, then connect them
+  // Auto-add Growloc default connections if not already in workspace.
+  // Reads current Zustand state via getState() to avoid stale-closure duplicates in StrictMode.
   useEffect(() => {
-    const existingIds = new Set(workspace.connections.map(c => c.id))
+    const { workspace: ws, addConnection } = useWorkspaceStore.getState()
+    const existingIds = new Set(ws.connections.map(c => c.id))
     for (const conn of GROWLOC_CONNECTIONS) {
-      if (!existingIds.has(conn.id)) {
-        addConnection(conn)
-        window.api.connectConnection(conn).catch(() => {})
-      }
+      if (!existingIds.has(conn.id)) addConnection(conn)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
