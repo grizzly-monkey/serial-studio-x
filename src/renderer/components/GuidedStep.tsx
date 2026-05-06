@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 
 type Phase = 'idle' | 'counting' | 'valid' | 'invalid'
 
@@ -67,8 +67,6 @@ export default function GuidedStep({
   const [isWriting, setIsWriting] = useState(false)
 
   const isValidReading = isConnected && typeof liveValue === 'number' && isFinite(liveValue)
-  const isValidRef = useRef(isValidReading)
-  isValidRef.current = isValidReading
 
   // Reset countdown when step becomes active (isLocked flips to false)
   useEffect(() => {
@@ -80,16 +78,17 @@ export default function GuidedStep({
     }
   }, [isLocked]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Countdown tick — transitions to valid/invalid at zero
+  // Countdown tick — pauses while probe is disconnected, resumes on reconnect
   useEffect(() => {
     if (phase !== 'counting') return
+    if (!isValidReading) return
     if (remaining <= 0) {
-      setPhase(isValidRef.current ? 'valid' : 'invalid')
+      setPhase('valid')
       return
     }
     const id = setTimeout(() => setRemaining(r => r - 1), 1000)
     return () => clearTimeout(id)
-  }, [phase, remaining])
+  }, [phase, remaining, isValidReading])
 
   async function handleCalibrate() {
     if (!isConnected || typeof liveValue !== 'number' || !isFinite(liveValue)) {
@@ -205,14 +204,17 @@ export default function GuidedStep({
               }}
             >Skip</button>
           )}
-          <span style={{
-            fontSize: 10, padding: '2px 8px', borderRadius: 4,
-            background: phase === 'invalid' ? `${DANGER}11` : phase === 'valid' ? `${SUCCESS}11` : 'var(--primary-light)',
-            color: phase === 'invalid' ? DANGER : phase === 'valid' ? SUCCESS : 'var(--primary)',
-            border: `1px solid ${(phase === 'invalid' ? DANGER : phase === 'valid' ? SUCCESS : 'var(--primary)')}33`,
-          }}>
-            {phase === 'counting' ? 'Running' : phase === 'valid' ? 'Ready' : 'Error'}
-          </span>
+          {(() => {
+            const paused = phase === 'counting' && !isValidReading
+            const c = phase === 'invalid' ? DANGER : phase === 'valid' ? SUCCESS : paused ? AMBER : 'var(--primary)'
+            const label = phase === 'valid' ? 'Ready' : phase === 'invalid' ? 'Error' : paused ? 'Paused' : 'Running'
+            return (
+              <span style={{
+                fontSize: 10, padding: '2px 8px', borderRadius: 4,
+                background: `${c}11`, color: c, border: `1px solid ${c}33`,
+              }}>{label}</span>
+            )
+          })()}
         </div>
       </div>
 
