@@ -59,6 +59,8 @@ export default function LogDrawer(): React.JSX.Element {
     return modbusRef(fc, addr)
   }
 
+  const CAL_IDS = new Set(['phg206a-default', 'ddm206a-default'])
+
   return (
     <div style={{
       borderTop: '1px solid var(--border)',
@@ -66,7 +68,9 @@ export default function LogDrawer(): React.JSX.Element {
       height: logDrawerOpen ? 220 : 32,
       transition: 'height 0.2s ease',
       overflow: 'hidden',
-      flexShrink: 0
+      flexShrink: 0,
+      position: 'relative',
+      zIndex: 10001,
     }}>
       {/* Header */}
       <div
@@ -125,6 +129,7 @@ export default function LogDrawer(): React.JSX.Element {
             filtered.slice(-2000).map((e, i) => {
               const isSys = e.connectionId === '__system__'
               const isTx = e.direction === 'tx'
+              const isCal = isTx && e.fc === 6 && CAL_IDS.has(e.connectionId)
               const isError = e.status === 'error'
               const ref = (!isSys && e.fc > 0) ? addrLabel(e.fc, e.address) : ''
 
@@ -134,6 +139,7 @@ export default function LogDrawer(): React.JSX.Element {
                   borderBottom: '1px solid var(--border)', alignItems: 'center',
                   background: isSys
                     ? 'rgba(148,163,184,0.04)'
+                    : isCal ? 'rgba(34,197,94,0.05)'
                     : isTx ? 'rgba(129,140,248,0.04)'
                     : isError ? 'rgba(239,68,68,0.05)'
                     : e.status === 'alert' ? 'rgba(245,158,11,0.05)'
@@ -144,10 +150,10 @@ export default function LogDrawer(): React.JSX.Element {
                   </span>
 
                   <span style={{
-                    color: isSys ? 'var(--text-muted)' : isTx ? 'var(--warning)' : 'var(--success)',
+                    color: isSys ? 'var(--text-muted)' : isCal ? 'var(--success)' : isTx ? 'var(--warning)' : 'var(--success)',
                     minWidth: 28, flexShrink: 0, fontWeight: 700, fontSize: 10
                   }}>
-                    {isSys ? 'SYS' : isTx ? 'TX→' : '←RX'}
+                    {isSys ? 'SYS' : isCal ? 'CAL' : isTx ? 'TX→' : '←RX'}
                   </span>
 
                   {/* Connection name — skip for system entries */}

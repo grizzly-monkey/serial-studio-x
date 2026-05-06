@@ -22,7 +22,7 @@ export interface GuidedStepProps {
   hasInput?: boolean
   inputLabel?: string
   inputStep?: number
-  inputInitial?: string  // static default shown in the input field (e.g. '1413' for EC slope, '25.0' for temp)
+  inputInitial?: string
 }
 
 const SUCCESS = '#22c55e'
@@ -68,10 +68,10 @@ export default function GuidedStep({
 
   const isValidReading = isConnected && typeof liveValue === 'number' && isFinite(liveValue)
 
-  // Reset countdown when step becomes active (isLocked flips to false)
+  // Reset to idle when step becomes active (isLocked flips to false)
   useEffect(() => {
     if (!isLocked && !isDone && !isSkipped) {
-      setPhase('counting')
+      setPhase('idle')
       setRemaining(timerSeconds)
       setInputValue(inputInitial ?? '')
       setWriteError(null)
@@ -90,12 +90,18 @@ export default function GuidedStep({
     return () => clearTimeout(id)
   }, [phase, remaining, isValidReading])
 
-  async function handleCalibrate() {
+  function handleStart() {
+    setPhase('counting')
+    setRemaining(timerSeconds)
+    setWriteError(null)
+  }
+
+  async function handleNext() {
     if (!isConnected || typeof liveValue !== 'number' || !isFinite(liveValue)) {
       setWriteError('Reading lost — check connection before saving.')
       return
     }
-    const reading = liveValue  // capture before await
+    const reading = liveValue
     if (hasInput) {
       const parsed = parseFloat(inputValue)
       if (isNaN(parsed)) {
@@ -107,19 +113,12 @@ export default function GuidedStep({
     setIsWriting(true)
     try {
       await onCalibrate(hasInput ? parseFloat(inputValue) : undefined)
-      onComplete(reading)  // use captured value
+      onComplete(reading)
     } catch (e) {
       setWriteError(e instanceof Error ? e.message : String(e))
     } finally {
       setIsWriting(false)
     }
-  }
-
-  function handleRetry() {
-    setPhase('counting')
-    setRemaining(timerSeconds)
-    setInputValue(inputInitial ?? '')
-    setWriteError(null)
   }
 
   // ── Locked ──────────────────────────────────────────────────────────
@@ -170,18 +169,26 @@ export default function GuidedStep({
     )
   }
 
-  // ── Active ───────────────────────────────────────────────────────────
-  const mins = Math.floor(remaining / 60)
-  const secs = remaining % 60
-  const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`
+  // ── Active — derived display values ─────────────────────────────────
+  const elapsed = timerSeconds - remaining
+  const pollCycle = 5 - (elapsed % 5)   // 5→4→3→2→1→5→... per polling interval
   const progress = Math.max(0, 1 - remaining / timerSeconds)
   const totalStr = timerSeconds >= 60
     ? `${Math.floor(timerSeconds / 60)}:${(timerSeconds % 60).toString().padStart(2, '0')}`
     : `0:${timerSeconds.toString().padStart(2, '0')}`
+  const remainMins = Math.floor(remaining / 60)
+  const remainSecs = remaining % 60
+  const remainStr = `${remainMins}:${remainSecs.toString().padStart(2, '0')}`
+
+  const paused = phase === 'counting' && !isValidReading
   const borderColor =
     phase === 'invalid' ? DANGER :
     phase === 'valid' ? SUCCESS :
+    paused ? AMBER :
     'var(--primary)'
+
+  const badgeColor = phase === 'invalid' ? DANGER : phase === 'valid' ? SUCCESS : paused ? AMBER : 'var(--primary)'
+  const badgeLabel = phase === 'valid' ? 'Ready' : phase === 'invalid' ? 'Error' : paused ? 'Paused' : 'Running'
 
   return (
     <div style={{
@@ -194,7 +201,7 @@ export default function GuidedStep({
         <span style={{ fontWeight: 700, fontSize: 12, color: 'var(--text)' }}>{title}</span>
         {isOptional && <OptBadge />}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
-          {isOptional && onSkip && (
+          {isOptional && onSkip && phase !== 'valid' && (
             <button
               onClick={onSkip}
               style={{
@@ -204,17 +211,13 @@ export default function GuidedStep({
               }}
             >Skip</button>
           )}
-          {(() => {
-            const paused = phase === 'counting' && !isValidReading
-            const c = phase === 'invalid' ? DANGER : phase === 'valid' ? SUCCESS : paused ? AMBER : 'var(--primary)'
-            const label = phase === 'valid' ? 'Ready' : phase === 'invalid' ? 'Error' : paused ? 'Paused' : 'Running'
-            return (
-              <span style={{
-                fontSize: 10, padding: '2px 8px', borderRadius: 4,
-                background: `${c}11`, color: c, border: `1px solid ${c}33`,
-              }}>{label}</span>
-            )
-          })()}
+          {phase !== 'idle' && (
+            <span style={{
+              fontSize: 10, padding: '2px 8px', borderRadius: 4,
+              background: `${badgeColor}11`, color: badgeColor,
+              border: `1px solid ${badgeColor}33`,
+            }}>{badgeLabel}</span>
+          )}
         </div>
       </div>
 
@@ -223,57 +226,81 @@ export default function GuidedStep({
         {instruction}
       </p>
 
-      {/* Countdown (counting phase only) */}
-      {phase === 'counting' && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-          <span style={{
-            fontSize: 20, fontWeight: 700, color: 'var(--text)',
-            fontVariantNumeric: 'tabular-nums', minWidth: 44,
-          }}>{timeStr}</span>
-          <div style={{ flex: 1, height: 4, background: 'var(--surface)', borderRadius: 2 }}>
-            <div style={{
-              width: `${progress * 100}%`, height: '100%',
-              background: 'var(--primary)', borderRadius: 2, transition: 'width 1s linear',
-            }} />
+      {/* Idle phase: live reading + Start Calibration */}
+      {phase === 'idle' && (
+        <>
+          <LiveReadingBox
+            isValidReading={isValidReading}
+            liveValue={liveValue}
+            liveUnit={liveUnit}
+            tempValue={tempValue}
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
+            <button
+              onClick={handleStart}
+              style={{
+                background: 'var(--primary)', color: '#fff', border: 'none',
+                borderRadius: 6, padding: '7px 20px', fontWeight: 700,
+                fontSize: 12, cursor: 'pointer',
+              }}
+            >Start Calibration</button>
           </div>
-          <span style={{ fontSize: 10, color: 'var(--text-muted)', minWidth: 28, textAlign: 'right' }}>
-            {totalStr}
-          </span>
-        </div>
+        </>
       )}
 
-      {/* Live reading (counting + valid phases) */}
-      {(phase === 'counting' || phase === 'valid') && (
-        <div style={{
-          background: 'var(--surface)', border: `1px solid ${SUCCESS}33`,
-          borderRadius: 5, padding: '7px 10px',
-          display: 'flex', alignItems: 'center', gap: 10,
-          marginBottom: phase === 'valid' ? 10 : 0,
-        }}>
-          <div style={{ width: 6, height: 6, borderRadius: '50%', background: isValidReading ? SUCCESS : DANGER }} />
-          {isValidReading ? (
-            <>
-              <span style={{ color: SUCCESS, fontWeight: 700, fontSize: 13 }}>
-                {(liveValue as number).toFixed(2)} {liveUnit}
-              </span>
-              {tempValue !== undefined && (
-                <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
-                  · Temp: {tempValue.toFixed(1)} °C
+      {/* Counting phase: polling cycle + progress bar + live reading */}
+      {phase === 'counting' && (
+        <>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10,
+            background: 'var(--surface)', borderRadius: 6, padding: '8px 12px',
+          }}>
+            <div style={{ textAlign: 'center', minWidth: 36 }}>
+              <div style={{
+                fontSize: 28, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
+                color: paused ? AMBER : 'var(--primary)', lineHeight: 1,
+              }}>{paused ? '—' : pollCycle}</div>
+              <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
+                {paused ? 'waiting' : 'next poll'}
+              </div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                  {paused ? 'Waiting for connection…' : `Stabilising · ${remainStr} left`}
                 </span>
-              )}
-            </>
-          ) : (
-            <span style={{ color: DANGER, fontSize: 11 }}>No reading — check connection</span>
-          )}
-          <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-muted)' }}>polling every 5s</span>
-        </div>
+                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{totalStr}</span>
+              </div>
+              <div style={{ height: 4, background: 'var(--border)', borderRadius: 2 }}>
+                <div style={{
+                  width: `${progress * 100}%`, height: '100%',
+                  background: paused ? AMBER : 'var(--primary)',
+                  borderRadius: 2, transition: 'width 1s linear',
+                }} />
+              </div>
+            </div>
+          </div>
+          <LiveReadingBox
+            isValidReading={isValidReading}
+            liveValue={liveValue}
+            liveUnit={liveUnit}
+            tempValue={tempValue}
+          />
+        </>
       )}
 
-      {/* Valid phase: input field + Calibrate button */}
+      {/* Valid phase: live reading + optional input + Next button */}
       {phase === 'valid' && (
         <>
+          <LiveReadingBox
+            isValidReading={isValidReading}
+            liveValue={liveValue}
+            liveUnit={liveUnit}
+            tempValue={tempValue}
+            style={{ marginBottom: 10 }}
+          />
           {hasInput && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, marginTop: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>{inputLabel}:</label>
               <input
                 type="number"
@@ -292,19 +319,19 @@ export default function GuidedStep({
           )}
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <button
-              onClick={handleCalibrate}
+              onClick={handleNext}
               disabled={isWriting}
               style={{
                 background: SUCCESS, color: '#fff', border: 'none', borderRadius: 6,
                 padding: '7px 20px', fontWeight: 700, fontSize: 12,
                 cursor: isWriting ? 'wait' : 'pointer', opacity: isWriting ? 0.7 : 1,
               }}
-            >{isWriting ? 'Saving...' : 'Calibrate'}</button>
+            >{isWriting ? 'Saving…' : 'Next →'}</button>
           </div>
         </>
       )}
 
-      {/* Invalid phase: error message + Retry button */}
+      {/* Invalid phase: error + Start Calibration */}
       {phase === 'invalid' && (
         <>
           <div style={{
@@ -318,15 +345,52 @@ export default function GuidedStep({
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <button
-              onClick={handleRetry}
+              onClick={handleStart}
               style={{
-                background: 'var(--surface)', color: DANGER, border: `1px solid ${DANGER}44`,
-                borderRadius: 6, padding: '7px 20px', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+                background: 'var(--primary)', color: '#fff', border: 'none',
+                borderRadius: 6, padding: '7px 20px', fontWeight: 700,
+                fontSize: 12, cursor: 'pointer',
               }}
-            >↺ Retry This Step</button>
+            >Start Calibration</button>
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+function LiveReadingBox({
+  isValidReading, liveValue, liveUnit, tempValue, style,
+}: {
+  isValidReading: boolean
+  liveValue: number | undefined
+  liveUnit: string
+  tempValue?: number | undefined
+  style?: React.CSSProperties
+}) {
+  return (
+    <div style={{
+      background: 'var(--surface)', border: `1px solid ${SUCCESS}33`,
+      borderRadius: 5, padding: '7px 10px',
+      display: 'flex', alignItems: 'center', gap: 10,
+      ...style,
+    }}>
+      <div style={{ width: 6, height: 6, borderRadius: '50%', background: isValidReading ? SUCCESS : DANGER, flexShrink: 0 }} />
+      {isValidReading ? (
+        <>
+          <span style={{ color: SUCCESS, fontWeight: 700, fontSize: 13 }}>
+            {(liveValue as number).toFixed(2)} {liveUnit}
+          </span>
+          {tempValue !== undefined && (
+            <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+              · Temp: {tempValue.toFixed(1)} °C
+            </span>
+          )}
+        </>
+      ) : (
+        <span style={{ color: DANGER, fontSize: 11 }}>No reading — check connection</span>
+      )}
+      <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-muted)' }}>polling every 5s</span>
     </div>
   )
 }

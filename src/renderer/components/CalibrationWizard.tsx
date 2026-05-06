@@ -41,6 +41,129 @@ interface StepConfig {
   useTempReading?: boolean  // show addr-2 (temp) as the live value instead of addr-0
 }
 
+// ── FactoryResetSection ───────────────────────────────────────────────
+
+const DANGER = '#ef4444'
+
+function FactoryResetSection({ connectionId, address, isConnected }: {
+  connectionId: string
+  address: number
+  isConnected: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const [confirming, setConfirming] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState<'ok' | 'error' | null>(null)
+  const [errMsg, setErrMsg] = useState<string | null>(null)
+
+  async function handleReset() {
+    setBusy(true)
+    setResult(null)
+    setErrMsg(null)
+    try {
+      await applyWrite(connectionId, address, 0)
+      setResult('ok')
+      setConfirming(false)
+    } catch (e) {
+      setErrMsg(e instanceof Error ? e.message : String(e))
+      setResult('error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function handleOpen() {
+    setOpen(o => !o)
+    setConfirming(false)
+    setResult(null)
+    setErrMsg(null)
+  }
+
+  return (
+    <div style={{ borderTop: '1px solid var(--border)', margin: '0 24px', paddingTop: 12, paddingBottom: 20 }}>
+      <button
+        onClick={handleOpen}
+        style={{
+          background: 'none', border: 'none', color: 'var(--text-muted)',
+          fontSize: 11, cursor: 'pointer', padding: 0, fontWeight: 600,
+        }}
+      >
+        {open ? '▾' : '▸'} Factory Reset (danger zone)
+      </button>
+
+      {open && (
+        <div style={{
+          marginTop: 10, padding: 12,
+          background: `${DANGER}11`, border: `1px solid ${DANGER}44`, borderRadius: 6,
+        }}>
+          <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--text-muted)' }}>
+            Restores all calibration values to factory defaults. The sensor must be fully recalibrated
+            afterwards. Writes 0 to reg 48225 (0x2020).
+          </p>
+
+          {result === 'ok' && (
+            <div style={{ fontSize: 11, color: '#22c55e', marginBottom: 8, fontWeight: 600 }}>
+              ✓ Factory reset sent successfully.
+            </div>
+          )}
+          {result === 'error' && (
+            <div style={{ fontSize: 11, color: DANGER, marginBottom: 8 }}>
+              ✗ Reset failed: {errMsg}
+            </div>
+          )}
+
+          {!isConnected && (
+            <div style={{ fontSize: 11, color: DANGER, marginBottom: 8 }}>
+              Sensor not connected — connect before resetting.
+            </div>
+          )}
+
+          {!confirming ? (
+            <button
+              onClick={() => setConfirming(true)}
+              disabled={!isConnected || busy}
+              style={{
+                background: DANGER, color: '#fff', border: 'none', borderRadius: 6,
+                padding: '6px 16px', cursor: (!isConnected || busy) ? 'not-allowed' : 'pointer',
+                fontWeight: 700, fontSize: 12, opacity: (!isConnected || busy) ? 0.5 : 1,
+              }}
+            >Factory Reset</button>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{
+                background: `${DANGER}22`, border: `1px solid ${DANGER}66`,
+                borderRadius: 5, padding: '8px 10px',
+                fontSize: 11, color: DANGER, fontWeight: 600,
+              }}>
+                ⚠ This will erase all calibration data on the sensor. Are you sure?
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => setConfirming(false)}
+                  disabled={busy}
+                  style={{
+                    background: 'var(--surface-2)', color: 'var(--text)', border: '1px solid var(--border)',
+                    borderRadius: 6, padding: '6px 16px', cursor: 'pointer', fontWeight: 600, fontSize: 12,
+                  }}
+                >Cancel</button>
+                <button
+                  onClick={handleReset}
+                  disabled={busy}
+                  style={{
+                    background: DANGER, color: '#fff', border: 'none', borderRadius: 6,
+                    padding: '6px 16px', cursor: busy ? 'wait' : 'pointer',
+                    fontWeight: 700, fontSize: 12, opacity: busy ? 0.7 : 1,
+                  }}
+                >{busy ? 'Resetting…' : 'Yes, reset now'}</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── StepperBar ────────────────────────────────────────────────────────
 
 function StepperBar({ steps, currentIndex, outcomes }: {
@@ -136,7 +259,7 @@ const PH_STEPS: StepConfig[] = [
   },
 ]
 
-function PhCalibration({ onReset }: { onReset: () => void }) {
+function PhCalibration() {
   const connStatus = useConnectionsStore(s => s.connections[PH_ID]?.status ?? 'idle')
   const rawPh = useConnectionsStore(s => s.connections[PH_ID]?.registerValues[0]?.decoded)
   const rawTemp = useConnectionsStore(s => s.connections[PH_ID]?.registerValues[2]?.decoded)
@@ -147,7 +270,6 @@ function PhCalibration({ onReset }: { onReset: () => void }) {
   const [currentStep, setCurrentStep] = useState(0)
   const [outcomes, setOutcomes] = useState<Outcome[]>(Array(PH_STEPS.length).fill('pending'))
   const [doneLabels, setDoneLabels] = useState<Array<string | undefined>>(Array(PH_STEPS.length).fill(undefined))
-  const [showReset, setShowReset] = useState(false)
 
   function handleComplete(i: number, reading: number) {
     const isTempStep = PH_STEPS[i].useTempReading
@@ -229,40 +351,7 @@ function PhCalibration({ onReset }: { onReset: () => void }) {
         )}
       </div>
 
-      {/* Factory reset */}
-      <div style={{ borderTop: '1px solid var(--border)', margin: '0 24px', paddingTop: 12, paddingBottom: 20 }}>
-        <button
-          onClick={() => setShowReset(r => !r)}
-          style={{
-            background: 'none', border: 'none', color: 'var(--text-muted)',
-            fontSize: 11, cursor: 'pointer', padding: 0, fontWeight: 600,
-          }}
-        >
-          {showReset ? '▾' : '▸'} Factory Reset (danger zone)
-        </button>
-        {showReset && (
-          <div style={{
-            marginTop: 10, padding: 12,
-            background: '#ef444411', border: '1px solid #ef444444', borderRadius: 6,
-          }}>
-            <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--text-muted)' }}>
-              Restores all calibration values to factory defaults. The sensor must be recalibrated afterwards.
-              Writes 0 to reg 48225 (0x2020).
-            </p>
-            <button
-              onClick={async () => {
-                if (!isConnected) return
-                await applyWrite(PH_ID, PH_ADDR.reset, 0)
-                onReset()
-              }}
-              style={{
-                background: '#ef4444', color: '#fff', border: 'none',
-                borderRadius: 6, padding: '6px 16px', cursor: 'pointer', fontWeight: 700, fontSize: 12,
-              }}
-            >Factory Reset</button>
-          </div>
-        )}
-      </div>
+      <FactoryResetSection connectionId={PH_ID} address={PH_ADDR.reset} isConnected={isConnected} />
     </div>
   )
 }
@@ -305,7 +394,7 @@ const EC_STEPS: StepConfig[] = [
   },
 ]
 
-function EcCalibration({ onReset }: { onReset: () => void }) {
+function EcCalibration() {
   const connStatus = useConnectionsStore(s => s.connections[EC_ID]?.status ?? 'idle')
   const rawEc = useConnectionsStore(s => s.connections[EC_ID]?.registerValues[0]?.decoded)
   const rawTemp = useConnectionsStore(s => s.connections[EC_ID]?.registerValues[2]?.decoded)
@@ -316,7 +405,6 @@ function EcCalibration({ onReset }: { onReset: () => void }) {
   const [currentStep, setCurrentStep] = useState(0)
   const [outcomes, setOutcomes] = useState<Outcome[]>(Array(EC_STEPS.length).fill('pending'))
   const [doneLabels, setDoneLabels] = useState<Array<string | undefined>>(Array(EC_STEPS.length).fill(undefined))
-  const [showReset, setShowReset] = useState(false)
 
   function handleComplete(i: number, reading: number) {
     const isTempStep = EC_STEPS[i].useTempReading
@@ -398,40 +486,7 @@ function EcCalibration({ onReset }: { onReset: () => void }) {
         )}
       </div>
 
-      {/* Factory reset */}
-      <div style={{ borderTop: '1px solid var(--border)', margin: '0 24px', paddingTop: 12, paddingBottom: 20 }}>
-        <button
-          onClick={() => setShowReset(r => !r)}
-          style={{
-            background: 'none', border: 'none', color: 'var(--text-muted)',
-            fontSize: 11, cursor: 'pointer', padding: 0, fontWeight: 600,
-          }}
-        >
-          {showReset ? '▾' : '▸'} Factory Reset (danger zone)
-        </button>
-        {showReset && (
-          <div style={{
-            marginTop: 10, padding: 12,
-            background: '#ef444411', border: '1px solid #ef444444', borderRadius: 6,
-          }}>
-            <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--text-muted)' }}>
-              Restores all calibration values to factory defaults. The sensor must be recalibrated afterwards.
-              Writes 0 to reg 48225 (0x2020).
-            </p>
-            <button
-              onClick={async () => {
-                if (!isConnected) return
-                await applyWrite(EC_ID, EC_ADDR.reset, 0)
-                onReset()
-              }}
-              style={{
-                background: '#ef4444', color: '#fff', border: 'none',
-                borderRadius: 6, padding: '6px 16px', cursor: 'pointer', fontWeight: 700, fontSize: 12,
-              }}
-            >Factory Reset</button>
-          </div>
-        )}
-      </div>
+      <FactoryResetSection connectionId={EC_ID} address={EC_ADDR.reset} isConnected={isConnected} />
     </div>
   )
 }
@@ -488,8 +543,8 @@ export default function CalibrationWizard({ onBack, onClose }: Props): React.JSX
       {/* Body — scrollable */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {tab === 'ph'
-          ? <PhCalibration key="ph" onReset={() => {}} />
-          : <EcCalibration key="ec" onReset={() => {}} />
+          ? <PhCalibration key="ph" />
+          : <EcCalibration key="ec" />
         }
       </div>
     </div>
