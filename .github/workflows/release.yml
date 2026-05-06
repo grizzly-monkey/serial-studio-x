@@ -102,7 +102,7 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           VERSION="${TAG#v}"
-          npm version --no-git-tag-version "$VERSION"
+          npm version --no-git-tag-version --allow-same-version "$VERSION"
 
       - name: Build app
         run: npm run build
